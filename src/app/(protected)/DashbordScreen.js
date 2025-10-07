@@ -5,10 +5,10 @@ import {
     StyleSheet,
     TouchableOpacity,
     ScrollView,
-    SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen({ navigation }) {
     return (
@@ -186,12 +186,12 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         paddingHorizontal: 16,
         borderRadius: 14,
-        minWidth: 140,
+        minWidth: 100,
         alignItems: "center",
     },
     summaryLabel: {
         fontSize: 14,
-        color: "#eee",
+        color: "#fff",
     },
     summaryValue: {
         fontSize: 20,
