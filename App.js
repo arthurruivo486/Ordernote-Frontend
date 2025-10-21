@@ -7,6 +7,30 @@ import {
   Text,
   View,
 } from "react-native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { NavigationContainer } from "@react-navigation/native";
+import { enableScreens } from 'react-native-screens';
+import { SafeAreaProvider } from 'react-native-safe-area-context'; // ⬅️ ADICIONE ESTA LINHA
+
+enableScreens();
+
+function HomeScreen() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <Text>Home!</Text>
+    </View>
+  );
+}
+
+function SettingsScreen() {
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <Text>Settings!</Text>
+    </View>
+  );
+}
+
+const Tab = createBottomTabNavigator();
 
 export default function App() {
   //Processo do GET - Solicitar dados do servidor
@@ -33,24 +57,14 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text>Projeto TCC - Turma B</Text>
-      <View>
-        {loading ? (
-          <ActivityIndicator />
-        ) : (
-          <>
-            <Button title="Buscar Dados" onPress={fetchData} />
-            <Button title="Limpar Dados" onPress={() => setData([])} />
-          </>
-        )}
-        {data &&
-          data.map((item) => {
-            return <Text key={item.id}>{item.email}</Text>;
-          })}
-      </View>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider> {/* ⬅️ ADICIONE ESTE WRAPPER */}
+      <NavigationContainer>
+        <Tab.Navigator>
+          <Tab.Screen name="Home" component={HomeScreen} />
+          <Tab.Screen name="Settings" component={SettingsScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

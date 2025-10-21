@@ -17,7 +17,7 @@ export default function DashboardScreen({ navigation }) {
             <ScrollView style={styles.scrollContainer}>
                 {/* Cabeçalho com gradiente */}
                 <LinearGradient
-                    colors={["#613fba", "#7e2cb3"]}
+                    colors={["#872bb8", "#311aa4"]}
                     start={{ x: 1.2, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.header}
@@ -109,11 +109,11 @@ export default function DashboardScreen({ navigation }) {
                         <Text style={styles.menuText}>Configurações</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.menuCard}>
-                        <Ionicons name="time-outline" size={30} color="#9c27b0" />
+                        <Ionicons name="time-outline" size={30} color="#e91e63" />
                         <Text style={styles.menuText}>Pedidos Pendentes</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.menuCard}>
-                        <Ionicons name="person-add-outline" size={30} color="#e91e63" />
+                        <Ionicons name="person-add-outline" size={30} color="#18d467" />
                         <Text style={styles.menuText}>Cadastrar Cliente</Text>
                     </TouchableOpacity>
                 </View>
@@ -122,10 +122,13 @@ export default function DashboardScreen({ navigation }) {
             {/* Rodapé Navegação Fixo */}
             <View style={styles.footer}>
                 <TouchableOpacity>
-                    <Ionicons name="home" size={32} color="#7b2ff7" />
+                    <Ionicons name="home" size={32} color="#872bb8" />
                 </TouchableOpacity>
                 <TouchableOpacity>
                     <Ionicons name="cart" size={32} color="#999" />
+                </TouchableOpacity>
+                <TouchableOpacity>
+                    <Ionicons name="add-circle-outline" size={32} color="#999" />
                 </TouchableOpacity>
                 <TouchableOpacity>
                     <Ionicons name="cube" size={32} color="#999" />
@@ -141,7 +144,7 @@ export default function DashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#f9f9f9",
+        backgroundColor: "#f9f4fc",
     },
     scrollContainer: {
         flex: 1,
@@ -154,7 +157,7 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: 20,
         paddingHorizontal: 20,
         paddingBottom: 20,
-        paddingTop: 50,
+        paddingTop: 36,
     },
     headerTop: {
         flexDirection: "row",
@@ -246,7 +249,7 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     mainButtonText: {
-        color: "#7b2ff7",
+        color: "#872bb8",
         fontSize: 20,
         fontWeight: "bold",
         marginBottom: 6,
