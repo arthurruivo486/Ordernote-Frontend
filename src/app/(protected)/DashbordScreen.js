@@ -121,10 +121,10 @@ export default function DashboardScreen({ navigation }) {
 
             {/* Rodapé Navegação Fixo */}
             <View style={styles.footer}>
-                <TouchableOpacity>
+<TouchableOpacity>
                     <Ionicons name="home" size={32} color="#872bb8" />
                 </TouchableOpacity>
-                <TouchableOpacity>
+                <TouchableOpacity onPress={() => navigation.navigate("Sales")}>
                     <Ionicons name="cart" size={32} color="#999" />
                 </TouchableOpacity>
                 <TouchableOpacity>
@@ -136,6 +136,7 @@ export default function DashboardScreen({ navigation }) {
                 <TouchableOpacity>
                     <Ionicons name="person" size={32} color="#999" />
                 </TouchableOpacity>
+                
             </View>
         </SafeAreaView>
     );
