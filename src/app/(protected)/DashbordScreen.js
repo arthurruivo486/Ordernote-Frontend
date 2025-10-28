@@ -32,7 +32,7 @@ export default function DashboardScreen({ navigation }) {
                     <View style={styles.summaryRow}>
                         <TouchableOpacity
                             style={styles.historicButton}
-                            onPress={() => navigation.navigate("Sales")}
+                            onPress={() => navigation.navigate("Vendas")}
                         >
                             <Text style={[styles.historicButtonText, { color: "#7b2ff7" }]}>
                                 Histórico
@@ -92,7 +92,7 @@ export default function DashboardScreen({ navigation }) {
                 {/* Fazer Venda */}
                 <TouchableOpacity
                     style={styles.mainButton}
-                    onPress={() => navigation.navigate("Sales")}
+                    onPress={() => navigation.navigate("Vendas")}
                 >
                     <Text style={styles.mainButtonText}>fazer venda</Text>
                     <Text style={styles.mainSubText}>crie uma venda já</Text>
@@ -100,11 +100,17 @@ export default function DashboardScreen({ navigation }) {
 
                 {/* Menu Rápido */}
                 <View style={styles.menuGrid}>
-                    <TouchableOpacity style={styles.menuCard}>
+                    <TouchableOpacity 
+                        style={styles.menuCard}
+                        onPress={() => navigation.navigate("Produtos")}
+                    >
                         <Ionicons name="cube-outline" size={30} color="#00bcd4" />
                         <Text style={styles.menuText}>Novo Produto</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuCard}>
+                    <TouchableOpacity 
+                        style={styles.menuCard}
+                        onPress={() => navigation.navigate("Configurações")}
+                    >
                         <Ionicons name="settings-outline" size={30} color="#ff9800" />
                         <Text style={styles.menuText}>Configurações</Text>
                     </TouchableOpacity>
@@ -112,32 +118,17 @@ export default function DashboardScreen({ navigation }) {
                         <Ionicons name="time-outline" size={30} color="#e91e63" />
                         <Text style={styles.menuText}>Pedidos Pendentes</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.menuCard}>
+                    <TouchableOpacity 
+                        style={styles.menuCard}
+                        onPress={() => navigation.navigate("Clientes")}
+                    >
                         <Ionicons name="person-add-outline" size={30} color="#18d467" />
                         <Text style={styles.menuText}>Cadastrar Cliente</Text>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
 
-            {/* Rodapé Navegação Fixo */}
-            <View style={styles.footer}>
-<TouchableOpacity>
-                    <Ionicons name="home" size={32} color="#872bb8" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate("Sales")}>
-                    <Ionicons name="cart" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity>
-                    <Ionicons name="add-circle-outline" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity>
-                    <Ionicons name="cube" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity>
-                    <Ionicons name="person" size={32} color="#999" />
-                </TouchableOpacity>
-                
-            </View>
+            {/* REMOVA O RODAPÉ FIXO - Agora é gerenciado pelo React Navigation */}
         </SafeAreaView>
     );
 }
@@ -149,7 +140,6 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        marginBottom: 80, // Espaço para o rodapé fixo
     },
 
     // HEADER
@@ -284,22 +274,5 @@ const styles = StyleSheet.create({
         color: "#444",
         fontWeight: "600",
         textAlign: "center",
-    },
-
-    // RODAPÉ FIXO
-    footer: {
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: "row",
-        justifyContent: "space-around",
-        padding: 18,
-        backgroundColor: "#fff",
-        borderTopLeftRadius: 22,
-        borderTopRightRadius: 22,
-        elevation: 10,
-        height: 80,
-        alignItems: "center",
     },
 });

@@ -1,4 +1,3 @@
-// ...existing code...
 import React, { useState, useMemo } from "react";
 import {
     View,
@@ -46,7 +45,7 @@ export default function SalesScreen({ navigation }) {
                     style={styles.header}
                 >
                     <View style={styles.headerTop}>
-                        <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <TouchableOpacity onPress={() => navigation.navigate("Dashboard")}>
                             <Ionicons name="chevron-back" size={26} color="#fff" />
                         </TouchableOpacity>
                         <Text style={styles.title}>Vendas</Text>
@@ -69,8 +68,8 @@ export default function SalesScreen({ navigation }) {
                         <TouchableOpacity
                             style={styles.historicButton}
                             onPress={() => {
-                                // exemplo: abrir histórico ou finalizar venda
-                                navigation.navigate("SalesHistory");
+                                // Você pode criar uma tela de histórico depois
+                                alert("Histórico de vendas");
                             }}
                         >
                             <Text style={[styles.historicButtonText, { color: "#7b2ff7" }]}>
@@ -86,6 +85,7 @@ export default function SalesScreen({ navigation }) {
                     <FlatList
                         data={PRODUCTS}
                         keyExtractor={(item) => item.id}
+                        scrollEnabled={false} // Desabilita scroll interno pois já está dentro de ScrollView
                         contentContainerStyle={{ paddingBottom: 20 }}
                         renderItem={({ item }) => (
                             <View style={styles.productCard}>
@@ -131,8 +131,9 @@ export default function SalesScreen({ navigation }) {
                             <TouchableOpacity
                                 style={styles.checkoutButton}
                                 onPress={() => {
-                                    // ação de finalizar venda (placeholder)
-                                    navigation.navigate("Checkout", { cart });
+                                    // Ação de finalizar venda
+                                    alert(`Venda finalizada! Total: R$ ${total.toFixed(2).replace(".", ",")}`);
+                                    setCart([]); // Limpa o carrinho
                                 }}
                             >
                                 <Text style={styles.checkoutText}>Finalizar venda - R$ {total.toFixed(2).replace(".", ",")}</Text>
@@ -141,24 +142,6 @@ export default function SalesScreen({ navigation }) {
                     )}
                 </View>
             </ScrollView>
-
-            <View style={styles.footer}>
-                <TouchableOpacity onPress={() => navigation.navigate("Dashboard")}>
-                    <Ionicons name="home" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity>
-                    <Ionicons name="cart" size={32} color="#872bb8" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate("NewProduct")}>
-                    <Ionicons name="add-circle-outline" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate("Inventory")}>
-                    <Ionicons name="cube" size={32} color="#999" />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
-                    <Ionicons name="person" size={32} color="#999" />
-                </TouchableOpacity>
-            </View>
         </SafeAreaView>
     );
 }
@@ -170,7 +153,6 @@ const styles = StyleSheet.create({
     },
     scrollContainer: {
         flex: 1,
-        marginBottom: 90,
     },
     header: {
         borderBottomLeftRadius: 20,
@@ -228,6 +210,7 @@ const styles = StyleSheet.create({
     content: {
         paddingHorizontal: 20,
         marginTop: 18,
+        paddingBottom: 20, // Adiciona padding na parte inferior
     },
     sectionTitle: {
         fontSize: 18,
@@ -307,20 +290,5 @@ const styles = StyleSheet.create({
     checkoutText: {
         color: "#fff",
         fontWeight: "700",
-    },
-    footer: {
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: "row",
-        justifyContent: "space-around",
-        padding: 16,
-        backgroundColor: "#fff",
-        borderTopLeftRadius: 22,
-        borderTopRightRadius: 22,
-        elevation: 10,
-        height: 80,
-        alignItems: "center",
     },
 });
