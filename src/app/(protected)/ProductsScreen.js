@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProductsScreen() {
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <Text style={styles.title}>Tela de Produtos</Text>
-      {/* Conteúdo da tela de produtos aqui */}
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -20,4 +20,4 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-});
+})

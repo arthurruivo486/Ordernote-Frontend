@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function DashboardScreen({ navigation }) {
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Conteúdo com scroll */}
             <ScrollView style={styles.scrollContainer}>
                 {/* Cabeçalho com gradiente */}
