@@ -27,7 +27,7 @@ function App() {
               if (route.name === 'Dashboard') {
                 iconName = focused ? 'home' : 'home-outline';
               } else if (route.name === 'UserScreen') {
-                iconName = focused ? 'flower' : 'cog-outline';
+                iconName = focused ? 'settings' : 'settings-outline';
               } else if (route.name === 'SaleScreen') {
                 iconName = focused ? 'cart' : 'cart-outline';
               } else if (route.name === 'ProductScreen') {
