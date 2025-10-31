@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 
 
 
-export default function Add() {
+export default function CustomerScreen() {
   return (
     <View>
         <Text>Add screen</Text>

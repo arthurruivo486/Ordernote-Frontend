@@ -9,7 +9,7 @@ import DashboardScreen from './(protected)/DashbordScreen';
 import UserScreen from './(protected)/UserScreen';
 import SaleScreen from './(protected)/SaleScreen';
 import ProductScreen from './(protected)/ProductScreen';
-import Add from './(protected)/Add';
+import CustomerScreen from './(protected)/Customer';
 
 const Tab = createBottomTabNavigator();
 
@@ -27,13 +27,13 @@ function App() {
               if (route.name === 'Dashboard') {
                 iconName = focused ? 'home' : 'home-outline';
               } else if (route.name === 'UserScreen') {
-                iconName = focused ? 'person' : 'person-outline';
+                iconName = focused ? 'flower' : 'cog-outline';
               } else if (route.name === 'SaleScreen') {
                 iconName = focused ? 'cart' : 'cart-outline';
               } else if (route.name === 'ProductScreen') {
                 iconName = focused ? 'cube' : 'cube-outline';
-              } else if (route.name === 'Add') {
-                iconName = focused ? 'add-circle' : 'add-circle-outline';
+              } else if (route.name === 'CustomerScreen') {
+                iconName = focused ? 'person' : 'person-outline';
               }
 
               return (
@@ -71,7 +71,7 @@ function App() {
         >
           <Tab.Screen name="Dashboard" component={DashboardScreen} />
           <Tab.Screen name="SaleScreen" component={SaleScreen} />
-          <Tab.Screen name="Add" component={Add} />
+          <Tab.Screen name="CustomerScreen" component={CustomerScreen} />
           <Tab.Screen name="ProductScreen" component={ProductScreen} />
           <Tab.Screen name="UserScreen" component={UserScreen} />
         </Tab.Navigator>
