@@ -3,10 +3,10 @@ import { View, Text } from 'react-native';
 
 
 
-export default function UserScreen() {
+export default function Add() {
   return (
     <View>
-        <Text>UserScreen</Text>
+        <Text>Add screen</Text>
     </View>
   );
 }

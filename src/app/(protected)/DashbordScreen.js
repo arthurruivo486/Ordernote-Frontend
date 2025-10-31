@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
         flexWrap: "wrap",
         justifyContent: "space-between",
         paddingHorizontal: 20,
-        marginBottom: 20,
+        marginBottom: 100,
         marginTop: 25,
     },
     menuCard: {

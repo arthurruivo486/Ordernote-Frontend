@@ -1,12 +1,13 @@
+
 import * as React from 'react';
 import { View, Text } from 'react-native';
 
 
 
-export default function UserScreen() {
+export default function ProductScreen() {
   return (
     <View>
-        <Text>UserScreen</Text>
+        <Text>ProductScreen</Text>
     </View>
   );
 }
