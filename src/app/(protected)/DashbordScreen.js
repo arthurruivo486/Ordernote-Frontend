@@ -128,7 +128,7 @@ export default function DashboardScreen({ navigation }) {
                 </View>
             </ScrollView>
 
-            {/* REMOVA O RODAPÉ FIXO - Agora é gerenciado pelo React Navigation */}
+          
         </SafeAreaView>
     );
 }
