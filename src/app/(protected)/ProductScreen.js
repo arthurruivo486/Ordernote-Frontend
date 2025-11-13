@@ -4,7 +4,7 @@ import { View, Text } from 'react-native';
 
 
 
-export default function ProductScreen() {
+export default function ProductScreen() {exp://r8-rnym-anonymous-8081.exp.direct
   return (
     <View>
         <Text>ProductScreen</Text>

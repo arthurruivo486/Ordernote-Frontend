@@ -58,7 +58,7 @@ function App() {
             tabBarShowLabel: false,
             tabBarStyle: {
               position: 'absolute',
-              bottom: 20,
+              bottom: 54,
               marginHorizontal: 20,
               borderRadius: 20,
               height: 70,
