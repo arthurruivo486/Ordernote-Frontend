@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
+const API_BASE = "https://studious-halibut-wr766v7w96gqh94gr-3000.app.github.dev/api";
 
 export default function DashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
@@ -139,7 +139,7 @@ export default function DashboardScreen({ navigation }) {
       >
         <LinearGradient
           colors={["#872bb8", "#311aa4"]}
-          start={{ x: 1.2, y: 0 }}
+          start={{ x: 1, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
@@ -277,7 +277,7 @@ export default function DashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f9f4fc",
   },
   scrollContainer: {
     flex: 1,

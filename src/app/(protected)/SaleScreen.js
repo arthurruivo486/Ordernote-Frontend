@@ -40,7 +40,7 @@ export default function SalesScreen({ navigation }) {
             <ScrollView style={styles.scrollContainer}>
                 <LinearGradient
                     colors={["#872bb8", "#311aa4"]}
-                    start={{ x: 1.2, y: 0 }}
+                    start={{ x: 1, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.header}
                 >
