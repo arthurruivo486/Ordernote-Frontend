@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const API_BASE = "https://studious-halibut-wr766v7w96gqh94gr-3000.app.github.dev/api";
+const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
 
 export default function DashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);

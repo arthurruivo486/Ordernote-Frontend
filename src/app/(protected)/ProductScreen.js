@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Não inserir produtos estáticos aqui — estes dados vêm do banco/API.
 // Configure `API_BASE_URL` para apontar para seu backend (ex.: 'http://localhost:3333').
-const API_BASE_URL = process.env.API_BASE_URL || 'https://studious-halibut-wr766v7w96gqh94gr-3000.app.github.dev/api';
+const API_BASE_URL = process.env.API_BASE_URL || 'https://h8gt5rj4-3000.brs.devtunnels.ms/api';
 const ENDPOINTS = {
   PRODUCT_GROUPS: `${API_BASE_URL}/product_groups`,
   PRODUCTS: `${API_BASE_URL}/products`,

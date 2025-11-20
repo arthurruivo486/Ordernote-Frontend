@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StatusBar, SafeAreaView, StyleSheet, Platform } from 'react-native';
+import { View, StatusBar, StyleSheet } from 'react-native';
 
 // Suas telas
 import DashboardScreen from './(protected)/DashbordScreen';
@@ -9,20 +10,28 @@ import UserScreen from './(protected)/UserScreen';
 import SaleScreen from './(protected)/SaleScreen';
 import ProductScreen from './(protected)/ProductScreen';
 import CustomerScreen from './(protected)/CustomerScreen';
+import NovaVendaScreen from './(protected)/NovaVendaScreen';
+import NovaDeliveryScreen from './(protected)/NovaDeliveryScreen';
 
 const Tab = createBottomTabNavigator();
+const SaleStack = createNativeStackNavigator();
+
+// Stack Navigator para a aba de Vendas
+function SaleStackNavigator() {
+  return (
+    <SaleStack.Navigator screenOptions={{ headerShown: false }}>
+      <SaleStack.Screen name="VendasMain" component={SaleScreen} />
+      <SaleStack.Screen name="NovaVenda" component={NovaVendaScreen} />
+      <SaleStack.Screen name="NovaDelivery" component={NovaDeliveryScreen} />
+    </SaleStack.Navigator>
+  );
+}
 
 function App() {
   return (
     <View style={styles.container}>
-
-      {/* ✅ Status bar translúcida e sem faixa branca */}
-      <StatusBar
-        
-        barStyle="light-content"
-      />
-
-      {/* ❌ REMOVEU NavigationContainer daqui */}
+      <StatusBar barStyle="light-content" />
+      
       <Tab.Navigator
         screenOptions={({ route }) => ({
           tabBarIcon: ({ focused, color, size }) => {
@@ -32,7 +41,7 @@ function App() {
               iconName = focused ? 'home' : 'home-outline';
             } else if (route.name === 'UserScreen') {
               iconName = focused ? 'settings' : 'settings-outline';
-            } else if (route.name === 'SaleScreen') {
+            } else if (route.name === 'Vendas') {
               iconName = focused ? 'cart' : 'cart-outline';
             } else if (route.name === 'ProductScreen') {
               iconName = focused ? 'cube' : 'cube-outline';
@@ -41,41 +50,20 @@ function App() {
             }
 
             return (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: -30,
-                }}
-              >
+              <View style={styles.tabIconContainer}>
                 <Ionicons name={iconName} size={size} color={color} />
               </View>
             );
           },
-
           tabBarShowLabel: false,
-          tabBarStyle: {
-            position: 'absolute',
-            bottom: 54,
-            marginHorizontal: 20,
-            borderRadius: 20,
-            height: 70,
-            backgroundColor: '#fff',
-            elevation: 5,
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowOffset: { width: 0, height: 5 },
-            shadowRadius: 8,
-            overflow: 'hidden',
-          },
+          tabBarStyle: styles.tabBar,
           tabBarActiveTintColor: '#872bb8',
           tabBarInactiveTintColor: 'gray',
           headerShown: false,
         })}
       >
         <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="SaleScreen" component={SaleScreen} />
+        <Tab.Screen name="Vendas" component={SaleStackNavigator} />
         <Tab.Screen name="CustomerScreen" component={CustomerScreen} />
         <Tab.Screen name="ProductScreen" component={ProductScreen} />
         <Tab.Screen name="UserScreen" component={UserScreen} />
@@ -93,16 +81,22 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 25 : 15, // ✅ Responsivo por OS
-    left: 16,
-    right: 16,
+    bottom: 54,
+    marginHorizontal: 20,
     borderRadius: 20,
     height: 70,
     backgroundColor: '#fff',
-    elevation: 8,
+    elevation: 5,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 12,
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  tabIconContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: -30,
   },
 });
