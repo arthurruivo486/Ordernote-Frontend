@@ -13,24 +13,39 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../../context/AuthContext";
+import api from "../../services/api";
 
-const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
-
-export default function SalesScreen({ navigation }) {
+export default function SaleScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sales, setSales] = useState([]);
+  const [customersMap, setCustomersMap] = useState({});
   const [showModal, setShowModal] = useState(false);
 
-  // Busca vendas
+  const { user, token, isAuthenticated } = useAuth();
+
+  // Busca vendas e clientes
   const fetchData = useCallback(async () => {
     try {
+      if (!isAuthenticated) {
+        console.log("❌ Usuário não autenticado na tela de vendas");
+        Alert.alert("Erro", "Usuário não autenticado");
+        return;
+      }
+
       setLoading(true);
-      const salesRes = await fetch(`${API_BASE}/sale`);
-      if (!salesRes.ok) throw new Error(`Erro vendas: ${salesRes.status}`);
-      const salesData = await salesRes.json();
+      console.log("📊 Carregando vendas para usuário:", user?.id);
+
+      const salesResponse = await api.get("/sales");
+      
+      if (salesResponse.data) {
+        console.log("✅ Vendas carregadas:", salesResponse.data);
+      }
 
       let salesArray = [];
+      const salesData = salesResponse.data;
+
       if (Array.isArray(salesData)) {
         salesArray = salesData;
       } else if (salesData && Array.isArray(salesData.sales)) {
@@ -40,24 +55,93 @@ export default function SalesScreen({ navigation }) {
         salesArray = [];
       }
 
-      setSales(salesArray);
-    } catch (err) {
-      console.error("Erro ao carregar vendas:", err);
-      Alert.alert("Erro", `Não foi possível carregar as vendas: ${err.message}`);
+      const custResponse = await api.get("/customers");
+      
+      if (custResponse.data) {
+        console.log("✅ Clientes carregados:", custResponse.data);
+      }
+
+      const cmap = {};
+      const custData = custResponse.data;
+      const customersArray = Array.isArray(custData)
+        ? custData
+        : custData && Array.isArray(custData.data)
+        ? custData.data
+        : custData && Array.isArray(custData.customers)
+        ? custData.customers
+        : [];
+
+      customersArray.forEach((c) => {
+        if (c && c.id) {
+          cmap[c.id] = c;
+        }
+      });
+
+      const userSales = Array.isArray(salesArray)
+        ? salesArray.filter(sale => {
+            if (sale.user_id) {
+              return sale.user_id === user.id;
+            }
+            return true;
+          })
+        : [];
+
+      const sortedSales = userSales.slice().sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
+      });
+
+      console.log(`✅ ${sortedSales.length} vendas carregadas para o usuário ${user.id}`);
+      
+      setSales(sortedSales);
+      setCustomersMap(cmap);
+    } catch (error) {
+      console.error("❌ Erro ao carregar vendas:", error);
+      
+      let errorMessage = "Não foi possível carregar as vendas";
+      
+      if (error.response?.status === 401) {
+        errorMessage = "Sessão expirada. Faça login novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (isAuthenticated) {
+      fetchData();
+    } else {
+      console.log("⏳ Aguardando autenticação para carregar vendas");
+      setLoading(false);
+    }
+  }, [fetchData, isAuthenticated]);
 
   const onRefresh = useCallback(() => {
+    if (!isAuthenticated) {
+      Alert.alert("Erro", "Usuário não autenticado");
+      return;
+    }
     setRefreshing(true);
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isAuthenticated]);
+
+  // Separar pedidos por status
+  const pedidosEmAndamento = sales.filter(sale => 
+    sale.status === 'pending' || sale.status === 'processing' || !sale.status
+  ).slice(0, 6);
+
+  const pedidosFinalizados = sales.filter(sale => 
+    sale.status === 'paid' || sale.status === 'completed' || sale.status === 'delivered'
+  ).slice(0, 6);
 
   const formatBRL = (value) => {
     const n = Number(value || 0);
@@ -82,49 +166,54 @@ export default function SalesScreen({ navigation }) {
     0
   );
 
-  // Separar pedidos por status
-  const pedidosEmAndamento = sales.filter(sale => 
-    sale.status === 'pending' || sale.status === 'processing' || !sale.status
-  ).slice(0, 6);
-
-  const pedidosFinalizados = sales.filter(sale => 
-    sale.status === 'completed' || sale.status === 'delivered' || sale.status === 'finished'
-  ).slice(0, 6);
-
   const renderPedidosGrid = (pedidos, tipo) => {
     const rows = [];
     for (let i = 0; i < pedidos.length; i += 3) {
       const rowPedidos = pedidos.slice(i, i + 3);
+      const customer = customersMap[pedidos[i]?.customer_id] || null;
+      const clientName = customer
+        ? customer.name
+        : pedidos[i]?.customer_id ? `Cliente #${pedidos[i]?.customer_id}` : "Venda Local";
+
       rows.push(
         <View key={i} style={styles.pedidosRow}>
-          {rowPedidos.map((pedido, index) => (
-            <TouchableOpacity 
-              key={pedido.id} 
-              style={[
-                styles.pedidoCard,
-                tipo === 'andamento' ? styles.pedidoAndamento : styles.pedidoFinalizado
-              ]}
-              onPress={() => navigation.navigate('DetalhesVenda', { vendaId: pedido.id })}
-            >
-              <View style={styles.pedidoHeader}>
-                <Text style={styles.pedidoNumero}>#{pedido.id}</Text>
-                <Ionicons 
-                  name={tipo === 'andamento' ? "time-outline" : "checkmark-circle-outline"} 
-                  size={16} 
-                  color={tipo === 'andamento' ? "#FFA500" : "#4CAF50"} 
-                />
-              </View>
-              <Text style={styles.pedidoCliente} numberOfLines={1}>
-                {pedido.customer_name || `Cliente ${pedido.customer_id}`}
-              </Text>
-              <Text style={styles.pedidoValor}>
-                {formatBRL(pedido.total_amount)}
-              </Text>
-              <Text style={styles.pedidoData}>
-                {pedido.created_at ? new Date(pedido.created_at).toLocaleDateString('pt-BR') : 'Data não disponível'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {rowPedidos.map((pedido, index) => {
+            const pedidoCustomer = customersMap[pedido.customer_id] || null;
+            const pedidoClientName = pedidoCustomer
+              ? pedidoCustomer.name
+              : pedido.customer_id ? `Cliente #${pedido.customer_id}` : "Venda Local";
+
+            return (
+              <TouchableOpacity 
+                key={pedido.id} 
+                style={[
+                  styles.pedidoCard,
+                  tipo === 'andamento' ? styles.pedidoAndamento : styles.pedidoFinalizado
+                ]}
+                onPress={() => Alert.alert("Detalhes da Venda", 
+                  `Cliente: ${pedidoClientName}\nValor: ${formatBRL(pedido.total_amount)}\nStatus: ${pedido.status}\nData: ${new Date(pedido.created_at).toLocaleDateString('pt-BR')}`
+                )}
+              >
+                <View style={styles.pedidoHeader}>
+                  <Text style={styles.pedidoNumero}>#{pedido.id}</Text>
+                  <Ionicons 
+                    name={tipo === 'andamento' ? "time-outline" : "checkmark-circle-outline"} 
+                    size={16} 
+                    color={tipo === 'andamento' ? "#FFA500" : "#4CAF50"} 
+                  />
+                </View>
+                <Text style={styles.pedidoCliente} numberOfLines={1}>
+                  {pedidoClientName}
+                </Text>
+                <Text style={styles.pedidoValor}>
+                  {formatBRL(pedido.total_amount)}
+                </Text>
+                <Text style={styles.pedidoData}>
+                  {pedido.created_at ? new Date(pedido.created_at).toLocaleDateString('pt-BR') : 'Data não disponível'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
           {rowPedidos.length < 3 && 
             Array.from({ length: 3 - rowPedidos.length }).map((_, emptyIndex) => (
               <View key={`empty-${emptyIndex}`} style={styles.pedidoCardVazio} />
@@ -136,12 +225,47 @@ export default function SalesScreen({ navigation }) {
     return rows;
   };
 
+  if (loading && !isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#7b2ff7" />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.authContainer}>
+          <Ionicons name="lock-closed" size={64} color="#7b2ff7" />
+          <Text style={styles.authTitle}>Acesso Restrito</Text>
+          <Text style={styles.authMessage}>
+            Faça login para acessar as vendas
+          </Text>
+          <TouchableOpacity 
+            style={styles.authButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.authButtonText}>Fazer Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            enabled={isAuthenticated}
+          />
         }
       >
         {/* PARTE ROXA SIMPLIFICADA */}
@@ -296,12 +420,11 @@ export default function SalesScreen({ navigation }) {
   );
 }
 
-// Adicione estes estilos ao seu StyleSheet existente
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc",
-    marginBottom:40,
+    marginBottom: 40,
   },
   scrollContainer: {
     flex: 1,
@@ -544,5 +667,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontWeight: '500',
+  },
+  // Estilos para autenticação
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#7b2ff7",
+  },
+  authContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  authTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#333",
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  authMessage: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 30,
+  },
+  authButton: {
+    backgroundColor: "#7b2ff7",
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 10,
+  },
+  authButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

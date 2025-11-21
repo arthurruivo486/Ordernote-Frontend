@@ -2,7 +2,8 @@ import * as React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StatusBar, StyleSheet } from 'react-native';
+import { View, StatusBar, StyleSheet, ActivityIndicator } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 
 // Suas telas
 import DashboardScreen from './(protected)/DashbordScreen';
@@ -12,9 +13,11 @@ import ProductScreen from './(protected)/ProductScreen';
 import CustomerScreen from './(protected)/CustomerScreen';
 import NovaVendaScreen from './(protected)/NovaVendaScreen';
 import NovaDeliveryScreen from './(protected)/NovaDeliveryScreen';
+import LoginScreen from './LoginScreen';
 
 const Tab = createBottomTabNavigator();
 const SaleStack = createNativeStackNavigator();
+const MainStack = createNativeStackNavigator();
 
 // Stack Navigator para a aba de Vendas
 function SaleStackNavigator() {
@@ -27,56 +30,87 @@ function SaleStackNavigator() {
   );
 }
 
-function App() {
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'UserScreen') {
+            iconName = focused ? 'settings' : 'settings-outline';
+          } else if (route.name === 'Vendas') {
+            iconName = focused ? 'cart' : 'cart-outline';
+          } else if (route.name === 'ProductScreen') {
+            iconName = focused ? 'cube' : 'cube-outline';
+          } else if (route.name === 'CustomerScreen') {
+            iconName = focused ? 'people' : 'people-outline';
+          }
+
+          return (
+            <View style={styles.tabIconContainer}>
+              <Ionicons name={iconName} size={size} color={color} />
+            </View>
+          );
+        },
+        tabBarShowLabel: false,
+        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: '#872bb8',
+        tabBarInactiveTintColor: 'gray',
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Vendas" component={SaleStackNavigator} />
+      <Tab.Screen name="CustomerScreen" component={CustomerScreen} />
+      <Tab.Screen name="ProductScreen" component={ProductScreen} />
+      <Tab.Screen name="UserScreen" component={UserScreen} />
+    </Tab.Navigator>
+  );
+}
+
+function AppNavigator() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#872bb8" />
+      </View>
+    );
+  }
+
+  return (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      {isAuthenticated ? (
+        <MainStack.Screen name="MainApp" component={MainTabs} />
+      ) : (
+        <MainStack.Screen name="Login" component={LoginScreen} />
+      )}
+    </MainStack.Navigator>
+  );
+}
+
+export default function App() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-
-            if (route.name === 'Dashboard') {
-              iconName = focused ? 'home' : 'home-outline';
-            } else if (route.name === 'UserScreen') {
-              iconName = focused ? 'settings' : 'settings-outline';
-            } else if (route.name === 'Vendas') {
-              iconName = focused ? 'cart' : 'cart-outline';
-            } else if (route.name === 'ProductScreen') {
-              iconName = focused ? 'cube' : 'cube-outline';
-            } else if (route.name === 'CustomerScreen') {
-              iconName = focused ? 'people' : 'people-outline';
-            }
-
-            return (
-              <View style={styles.tabIconContainer}>
-                <Ionicons name={iconName} size={size} color={color} />
-              </View>
-            );
-          },
-          tabBarShowLabel: false,
-          tabBarStyle: styles.tabBar,
-          tabBarActiveTintColor: '#872bb8',
-          tabBarInactiveTintColor: 'gray',
-          headerShown: false,
-        })}
-      >
-        <Tab.Screen name="Dashboard" component={DashboardScreen} />
-        <Tab.Screen name="Vendas" component={SaleStackNavigator} />
-        <Tab.Screen name="CustomerScreen" component={CustomerScreen} />
-        <Tab.Screen name="ProductScreen" component={ProductScreen} />
-        <Tab.Screen name="UserScreen" component={UserScreen} />
-      </Tab.Navigator>
+      <AppNavigator />
     </View>
   );
 }
 
-export default App;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#311aa4',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: '#311aa4',
   },
   tabBar: {

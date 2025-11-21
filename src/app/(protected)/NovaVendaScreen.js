@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
+import { useAuth } from "../../context/AuthContext"; // ← Import do contexto
+import api from "../../services/api"; // ← Import da API configurada
 
 export default function NovaVendaScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -26,49 +26,78 @@ export default function NovaVendaScreen({ navigation }) {
   const [showClientesModal, setShowClientesModal] = useState(false);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
 
-  // Carregar clientes e produtos
+  // ✅ Usar o contexto de autenticação
+  const { user, token, isAuthenticated } = useAuth();
+
+  // Verificar autenticação ao carregar
   useEffect(() => {
+    if (!isAuthenticated) {
+      Alert.alert("Erro", "Usuário não autenticado");
+      navigation.goBack();
+      return;
+    }
+    
+    console.log("✅ Usuário autenticado:", user?.name);
     carregarClientes();
     carregarProdutos();
-  }, []);
+  }, [isAuthenticated]);
 
   const carregarClientes = async () => {
     try {
-      const response = await fetch(`${API_BASE}/customers`);
-      if (response.ok) {
-        const data = await response.json();
-        setClientes(Array.isArray(data) ? data : data.data || []);
+      console.log("📞 Carregando clientes...");
+      const response = await api.get("/customers");
+      
+      if (response.data) {
+        const data = response.data;
+        const clientesData = Array.isArray(data) ? data : data.customers || data.data || [];
+        setClientes(clientesData);
+        console.log(`✅ ${clientesData.length} clientes carregados`);
       }
     } catch (error) {
-      console.error("Erro ao carregar clientes:", error);
+      console.error("❌ Erro ao carregar clientes:", error.response?.data || error.message);
+      Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
     }
   };
 
   const carregarProdutos = async () => {
     try {
-      const response = await fetch(`${API_BASE}/products`);
-      if (response.ok) {
-        const data = await response.json();
-        setProdutosDisponiveis(Array.isArray(data) ? data : data.data || []);
+      console.log("📦 Carregando produtos...");
+      const response = await api.get("/product");
+      
+      if (response.data) {
+        const data = response.data;
+        const produtosData = Array.isArray(data) ? data : data.products || data.data || [];
+        setProdutosDisponiveis(produtosData);
+        console.log(`✅ ${produtosData.length} produtos carregados`);
       }
     } catch (error) {
-      console.error("Erro ao carregar produtos:", error);
+      console.error("❌ Erro ao carregar produtos:", error.response?.data || error.message);
+      Alert.alert("Erro", "Não foi possível carregar a lista de produtos");
     }
   };
 
   const adicionarProduto = (produto) => {
+    if (!produto || !produto.id) {
+      console.error("Produto inválido:", produto);
+      return;
+    }
+
     const produtoExistente = produtos.find(p => p.id === produto.id);
     if (produtoExistente) {
       setProdutos(produtos.map(p =>
-        p.id === produto.id ? { ...p, quantidade: p.quantidade + 1 } : p
+        p.id === produto.id ? { 
+          ...p, 
+          quantidade: p.quantidade + 1,
+          subtotal: (p.quantidade + 1) * p.preco
+        } : p
       ));
     } else {
       setProdutos([...produtos, {
         id: produto.id,
-        nome: produto.name,
-        preco: produto.price,
+        nome: produto.name || produto.nome || "Produto sem nome",
+        preco: parseFloat(produto.price) || 0,
         quantidade: 1,
-        subtotal: produto.price
+        subtotal: parseFloat(produto.price) || 0
       }]);
     }
     setShowProdutosModal(false);
@@ -93,7 +122,7 @@ export default function NovaVendaScreen({ navigation }) {
   };
 
   const calcularTotal = () => {
-    return produtos.reduce((total, produto) => total + produto.subtotal, 0);
+    return produtos.reduce((total, produto) => total + (produto.subtotal || 0), 0);
   };
 
   const finalizarVenda = async () => {
@@ -102,35 +131,48 @@ export default function NovaVendaScreen({ navigation }) {
       return;
     }
 
+    if (!isAuthenticated) {
+      Alert.alert("Erro", "Usuário não autenticado. Faça login novamente.");
+      return;
+    }
+
     setLoading(true);
     try {
-      // Primeiro criar o order
+      console.log("🚀 Iniciando processo de venda para usuário:", user.id);
+
+      // ✅ 1. Primeiro criar o order
       const orderData = {
         table_number: tableNumber || null,
         notes: observacoes,
         status: 'open'
       };
 
-      const orderResponse = await fetch(`${API_BASE}/orders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(orderData),
-      });
+      console.log("📋 Criando order:", orderData);
 
-      if (!orderResponse.ok) throw new Error("Erro ao criar pedido");
+      const orderResponse = await api.post("/order", orderData);
 
-      const orderResult = await orderResponse.json();
-      const orderId = orderResult.id;
+      if (orderResponse.data) {
+        console.log("✅ Order criada:", orderResponse.data);
+      }
 
-      // Agora criar a sale
+      // ✅ CORREÇÃO: A API retorna orderId (com I maiúsculo)
+      const orderId = orderResponse.data.orderId || orderResponse.data.id || orderResponse.data.order_id;
+      
+      if (!orderId) {
+        console.log("❌ Estrutura completa da resposta:", JSON.stringify(orderResponse.data, null, 2));
+        throw new Error("ID do pedido não retornado pela API");
+      }
+
+      console.log("🎯 Order ID obtido:", orderId);
+
+      // ✅ 2. Agora criar a sale - O user_id VEM DO TOKEN (não precisa enviar)
       const saleData = {
         order_id: orderId,
-        customer_id: clienteId,
+        customer_id: clienteId || null,
         total_amount: calcularTotal(),
         payment_method: paymentMethod,
-        status: 'pending',
+        status: 'paid',
+        // ❌ NÃO enviar user_id - ele vem do token via middleware
         items: produtos.map(produto => ({
           product_id: produto.id,
           quantity: produto.quantidade,
@@ -139,28 +181,44 @@ export default function NovaVendaScreen({ navigation }) {
         }))
       };
 
-      const saleResponse = await fetch(`${API_BASE}/sale`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(saleData),
-      });
+      console.log("💰 Criando sale:", saleData);
+      console.log("👤 User ID (vindo do token):", user.id);
 
-      if (!saleResponse.ok) throw new Error("Erro ao criar venda");
+      // ✅ 3. Criar a venda usando a API configurada (já com token)
+      const saleResponse = await api.post("/sales", saleData);
 
-      Alert.alert("Sucesso", "Venda realizada com sucesso!", [
-        { text: "OK", onPress: () => navigation.goBack() }
-      ]);
+      console.log("✅ Venda criada com sucesso:", saleResponse.data);
+
+      Alert.alert(
+        "Sucesso", 
+        "Venda realizada com sucesso!", 
+        [
+          { 
+            text: "OK", 
+            onPress: () => navigation.goBack() 
+          }
+        ]
+      );
       
     } catch (error) {
-      console.error("Erro:", error);
-      Alert.alert("Erro", "Não foi possível finalizar a venda.");
+      console.error("❌ Erro completo na venda:", error);
+      console.error("❌ Detalhes do erro:", error.response?.data);
+      
+      let errorMessage = "Não foi possível finalizar a venda.";
+      
+      if (error.response?.status === 401) {
+        errorMessage = "Sessão expirada. Faça login novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ Mostrar informações do usuário logado
   const clienteSelecionado = clientes.find(c => c.id === clienteId);
 
   return (
@@ -169,11 +227,20 @@ export default function NovaVendaScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nova Venda - Local</Text>
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle}>Nova Venda - Local</Text>
+          <Text style={styles.userInfo}>Vendedor: {user?.name}</Text>
+        </View>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.content}>
+        {/* Seção Informações do Vendedor */}
+        <View style={styles.userSection}>
+          <Text style={styles.userLabel}>Vendedor:</Text>
+          <Text style={styles.userName}>{user?.name} (ID: {user?.id})</Text>
+        </View>
+
         {/* Seção Mesa */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Mesa</Text>
@@ -194,7 +261,7 @@ export default function NovaVendaScreen({ navigation }) {
             onPress={() => setShowClientesModal(true)}
           >
             <Text style={clienteSelecionado ? styles.selectButtonText : styles.selectButtonPlaceholder}>
-              {clienteSelecionado ? clienteSelecionado.name : "Selecionar cliente (opcional)"}
+              {clienteSelecionado ? clienteSelecionado.name || clienteSelecionado.nome : "Selecionar cliente (opcional)"}
             </Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
@@ -213,38 +280,42 @@ export default function NovaVendaScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {produtos.map((produto) => (
-            <View key={produto.id} style={styles.produtoItem}>
-              <View style={styles.produtoRow}>
-                <View style={styles.produtoInfo}>
-                  <Text style={styles.produtoNome}>{produto.nome}</Text>
-                  <Text style={styles.produtoPreco}>R$ {produto.preco.toFixed(2)}</Text>
-                </View>
-                <View style={styles.quantidadeContainer}>
+          {produtos.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhum produto adicionado</Text>
+          ) : (
+            produtos.map((produto) => (
+              <View key={produto.id} style={styles.produtoItem}>
+                <View style={styles.produtoRow}>
+                  <View style={styles.produtoInfo}>
+                    <Text style={styles.produtoNome}>{produto.nome}</Text>
+                    <Text style={styles.produtoPreco}>R$ {produto.preco.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.quantidadeContainer}>
+                    <TouchableOpacity 
+                      style={styles.quantidadeButton}
+                      onPress={() => atualizarQuantidade(produto.id, produto.quantidade - 1)}
+                    >
+                      <Ionicons name="remove" size={16} color="#7b2ff7" />
+                    </TouchableOpacity>
+                    <Text style={styles.quantidadeText}>{produto.quantidade}</Text>
+                    <TouchableOpacity 
+                      style={styles.quantidadeButton}
+                      onPress={() => atualizarQuantidade(produto.id, produto.quantidade + 1)}
+                    >
+                      <Ionicons name="add" size={16} color="#7b2ff7" />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.subtotal}>R$ {produto.subtotal.toFixed(2)}</Text>
                   <TouchableOpacity 
-                    style={styles.quantidadeButton}
-                    onPress={() => atualizarQuantidade(produto.id, produto.quantidade - 1)}
+                    style={styles.removeButton}
+                    onPress={() => removerProduto(produto.id)}
                   >
-                    <Ionicons name="remove" size={16} color="#7b2ff7" />
-                  </TouchableOpacity>
-                  <Text style={styles.quantidadeText}>{produto.quantidade}</Text>
-                  <TouchableOpacity 
-                    style={styles.quantidadeButton}
-                    onPress={() => atualizarQuantidade(produto.id, produto.quantidade + 1)}
-                  >
-                    <Ionicons name="add" size={16} color="#7b2ff7" />
+                    <Ionicons name="trash-outline" size={18} color="#ff4444" />
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.subtotal}>R$ {produto.subtotal.toFixed(2)}</Text>
-                <TouchableOpacity 
-                  style={styles.removeButton}
-                  onPress={() => removerProduto(produto.id)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#ff4444" />
-                </TouchableOpacity>
               </View>
-            </View>
-          ))}
+            ))
+          )}
         </View>
 
         {/* Seção Pagamento */}
@@ -282,7 +353,7 @@ export default function NovaVendaScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Observações</Text>
           <TextInput
-            style={[styles.input, { height: 80 }]}
+            style={[styles.input, styles.textArea]}
             placeholder="Observações da venda (opcional)"
             multiline
             value={observacoes}
@@ -302,7 +373,7 @@ export default function NovaVendaScreen({ navigation }) {
         <TouchableOpacity 
           style={[styles.finalizarButton, loading && styles.finalizarButtonDisabled]}
           onPress={finalizarVenda}
-          disabled={loading}
+          disabled={loading || !isAuthenticated}
         >
           <Text style={styles.finalizarButtonText}>
             {loading ? "Processando..." : "Finalizar Venda"}
@@ -325,19 +396,23 @@ export default function NovaVendaScreen({ navigation }) {
               </TouchableOpacity>
             </View>
             <ScrollView>
-              {clientes.map(cliente => (
-                <TouchableOpacity
-                  key={cliente.id}
-                  style={styles.clienteItem}
-                  onPress={() => {
-                    setClienteId(cliente.id);
-                    setShowClientesModal(false);
-                  }}
-                >
-                  <Text style={styles.clienteNome}>{cliente.name}</Text>
-                  {cliente.phone && <Text style={styles.clientePhone}>{cliente.phone}</Text>}
-                </TouchableOpacity>
-              ))}
+              {clientes.length === 0 ? (
+                <Text style={styles.emptyModalText}>Nenhum cliente cadastrado</Text>
+              ) : (
+                clientes.map(cliente => (
+                  <TouchableOpacity
+                    key={cliente.id}
+                    style={styles.clienteItem}
+                    onPress={() => {
+                      setClienteId(cliente.id);
+                      setShowClientesModal(false);
+                    }}
+                  >
+                    <Text style={styles.clienteNome}>{cliente.name || cliente.nome}</Text>
+                    {cliente.phone && <Text style={styles.clientePhone}>{cliente.phone}</Text>}
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -358,19 +433,27 @@ export default function NovaVendaScreen({ navigation }) {
               </TouchableOpacity>
             </View>
             <ScrollView>
-              {produtosDisponiveis.map(produto => (
-                <TouchableOpacity
-                  key={produto.id}
-                  style={styles.produtoModalItem}
-                  onPress={() => adicionarProduto(produto)}
-                >
-                  <View style={styles.produtoModalInfo}>
-                    <Text style={styles.produtoModalNome}>{produto.name}</Text>
-                    <Text style={styles.produtoModalPreco}>R$ {produto.price.toFixed(2)}</Text>
-                  </View>
-                  <Ionicons name="add-circle" size={24} color="#7b2ff7" />
-                </TouchableOpacity>
-              ))}
+              {produtosDisponiveis.length === 0 ? (
+                <Text style={styles.emptyModalText}>Nenhum produto disponível</Text>
+              ) : (
+                produtosDisponiveis.map(produto => (
+                  <TouchableOpacity
+                    key={produto.id}
+                    style={styles.produtoModalItem}
+                    onPress={() => adicionarProduto(produto)}
+                  >
+                    <View style={styles.produtoModalInfo}>
+                      <Text style={styles.produtoModalNome}>
+                        {produto.name || produto.nome}
+                      </Text>
+                      <Text style={styles.produtoModalPreco}>
+                        R$ {parseFloat(produto.price || 0).toFixed(2)}
+                      </Text>
+                    </View>
+                    <Ionicons name="add-circle" size={24} color="#7b2ff7" />
+                  </TouchableOpacity>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -379,12 +462,12 @@ export default function NovaVendaScreen({ navigation }) {
   );
 }
 
+// ✅ ESTILOS ATUALIZADOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc",
-    marginBottom:120,
-
+    marginBottom: 120,
   },
   header: {
     flexDirection: "row",
@@ -395,10 +478,41 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
+  headerInfo: {
+    alignItems: "center",
+  },
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#333",
+  },
+  userInfo: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+  },
+  userSection: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  userLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#7b2ff7",
   },
   content: {
     flex: 1,
@@ -434,6 +548,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     backgroundColor: "#f9f9f9",
   },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
   selectButton: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -465,6 +583,12 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginLeft: 5,
     fontSize: 12,
+  },
+  emptyText: {
+    textAlign: "center",
+    color: "#999",
+    fontStyle: "italic",
+    padding: 20,
   },
   produtoItem: {
     borderWidth: 1,
@@ -604,6 +728,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  emptyModalText: {
+    textAlign: 'center',
+    color: '#999',
+    fontStyle: 'italic',
+    padding: 20,
   },
   clienteItem: {
     padding: 15,

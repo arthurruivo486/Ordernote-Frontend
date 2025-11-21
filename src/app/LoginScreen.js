@@ -8,13 +8,14 @@ import {
   ActivityIndicator,
   Alert
 } from "react-native";
-
-const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
+import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
   async function handleLogin() {
     if (!email || !password) {
@@ -25,29 +26,27 @@ export default function LoginScreen({ navigation }) {
     try {
       setLoading(true);
 
-      const res = await fetch(`${API_BASE}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim(),
-        }),
+      const response = await api.post("/login", {
+        email: email.trim(),
+        password: password.trim(),
       });
 
-      const data = await res.json();
-      console.log("RESPOSTA LOGIN:", data);
+      console.log("RESPOSTA LOGIN:", response.data);
 
-      if (res.status === 200) {
+      if (response.status === 200) {
+        const { user, token } = response.data;
+        
+        // Salvar no contexto e AsyncStorage
+        await login(user, token);
+        
         Alert.alert("Sucesso", "Login realizado!");
-
-        // 👉 Vai para App.js
         navigation.replace("MainApp");
-      } else {
-        Alert.alert("Erro", data.message || "Falha ao fazer login");
       }
-    } catch (err) {
-      console.log(err);
-      Alert.alert("Erro", "Erro de conexão com servidor");
+    } catch (error) {
+      console.log("ERRO LOGIN:", error.response?.data || error.message);
+      
+      const errorMessage = error.response?.data?.message || "Erro ao fazer login";
+      Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -75,7 +74,7 @@ export default function LoginScreen({ navigation }) {
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
+      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
@@ -94,14 +93,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-
   title: {
     fontSize: 32,
     color: "#fff",
     marginBottom: 40,
     fontWeight: "bold",
   },
-
   input: {
     width: "100%",
     backgroundColor: "#fff",
@@ -109,7 +106,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 15,
   },
-
   button: {
     width: "100%",
     padding: 15,
@@ -117,7 +113,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-
   buttonText: {
     color: "#fff",
     fontSize: 18,
