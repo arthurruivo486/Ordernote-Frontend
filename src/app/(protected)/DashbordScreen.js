@@ -12,8 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../context/AuthContext"; // ← Import do contexto
-import api from "../../services/api"; // ← Import da API configurada
+
+const API_BASE = "https://h8gt5rj4-3000.brs.devtunnels.ms/api";
 
 export default function DashboardScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
@@ -21,32 +21,20 @@ export default function DashboardScreen({ navigation }) {
   const [sales, setSales] = useState([]);
   const [customersMap, setCustomersMap] = useState({});
 
-  // ✅ Usar o contexto de autenticação
-  const { user, token, isAuthenticated } = useAuth();
-
   // Busca vendas e clientes e monta o mapa de customers
   const fetchData = useCallback(async () => {
     try {
-      // ✅ Verificar autenticação antes de fazer requisições
-      if (!isAuthenticated) {
-        console.log("❌ Usuário não autenticado no dashboard");
-        Alert.alert("Erro", "Usuário não autenticado");
-        return;
-      }
-
       setLoading(true);
-      console.log("📊 Carregando dashboard para usuário:", user?.id);
 
-      // ✅ Buscar vendas usando a API configurada (já com token)
-      const salesResponse = await api.get("/sales");
-      
-      if (salesResponse.data) {
-        console.log("✅ Vendas carregadas:", salesResponse.data);
-      }
+      // Buscar vendas - com tratamento mais robusto
+      const salesRes = await fetch(`${API_BASE}/sale`);
+      if (!salesRes.ok) throw new Error(`Erro vendas: ${salesRes.status}`);
+      const salesData = await salesRes.json();
+
+      console.log("Resposta da API de vendas:", salesData); // Para debug
 
       // CORREÇÃO: Tratamento mais seguro dos dados
       let salesArray = [];
-      const salesData = salesResponse.data;
 
       if (Array.isArray(salesData)) {
         // Se o backend devolve um array diretamente
@@ -59,16 +47,13 @@ export default function DashboardScreen({ navigation }) {
         salesArray = [];
       }
 
-      // ✅ Buscar clientes usando a API configurada (já com token)
-      const custResponse = await api.get("/customers");
-      
-      if (custResponse.data) {
-        console.log("✅ Clientes carregados:", custResponse.data);
-      }
+      // Buscar clientes (para exibir nome/telefone)
+      const custRes = await fetch(`${API_BASE}/customers`);
+      if (!custRes.ok) throw new Error(`Erro clientes: ${custRes.status}`);
+      const custData = await custRes.json();
 
       // montar mapa id -> cliente
       const cmap = {};
-      const custData = custResponse.data;
       const customersArray = Array.isArray(custData)
         ? custData
         : custData && Array.isArray(custData.data)
@@ -83,68 +68,38 @@ export default function DashboardScreen({ navigation }) {
         }
       });
 
-      // ✅ Filtrar vendas apenas do usuário logado (se o backend não filtrar)
-      const userSales = Array.isArray(salesArray)
-        ? salesArray.filter(sale => {
-            // Se a venda tem user_id, filtrar apenas as do usuário logado
-            if (sale.user_id) {
-              return sale.user_id === user.id;
-            }
-            // Se não tem user_id, mostrar todas (para compatibilidade)
-            return true;
+      // ordenar vendas por data desc (apenas se salesArray for array)
+      const sortedSales = Array.isArray(salesArray)
+        ? salesArray.slice().sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tb - ta;
           })
         : [];
 
-      // ordenar vendas por data desc
-      const sortedSales = userSales.slice().sort((a, b) => {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return tb - ta;
-      });
-
-      console.log(`✅ ${sortedSales.length} vendas carregadas para o usuário ${user.id}`);
-      
       setSales(sortedSales);
       setCustomersMap(cmap);
-    } catch (error) {
-      console.error("❌ Erro ao carregar dashboard:", error);
-      
-      let errorMessage = "Não foi possível carregar o dashboard";
-      
-      if (error.response?.status === 401) {
-        errorMessage = "Sessão expirada. Faça login novamente.";
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert("Erro", errorMessage);
+    } catch (err) {
+      console.error("Erro ao carregar dashboard:", err);
+      Alert.alert(
+        "Erro",
+        `Não foi possível carregar o dashboard: ${err.message}`
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isAuthenticated, user]); // ← Dependências atualizadas
+  }, []);
 
   useEffect(() => {
-    // ✅ Só carregar dados se estiver autenticado
-    if (isAuthenticated) {
-      fetchData();
-    } else {
-      console.log("⏳ Aguardando autenticação para carregar dashboard");
-      setLoading(false);
-    }
-  }, [fetchData, isAuthenticated]);
+    fetchData();
+  }, [fetchData]);
 
   // Pull to refresh
   const onRefresh = useCallback(() => {
-    if (!isAuthenticated) {
-      Alert.alert("Erro", "Usuário não autenticado");
-      return;
-    }
     setRefreshing(true);
     fetchData();
-  }, [fetchData, isAuthenticated]);
+  }, [fetchData]);
 
   // util: formata BRL
   const formatBRL = (value) => {
@@ -174,62 +129,22 @@ export default function DashboardScreen({ navigation }) {
   // recentes: 6 primeiros da lista (já ordenada)
   const recentSales = sales.slice(0, 6);
 
-  // ✅ Mostrar loading enquanto verifica autenticação
-  if (loading && !isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#7b2ff7" />
-          <Text style={styles.loadingText}>Carregando...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // ✅ Mostrar mensagem se não estiver autenticado
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.authContainer}>
-          <Ionicons name="lock-closed" size={64} color="#7b2ff7" />
-          <Text style={styles.authTitle}>Acesso Restrito</Text>
-          <Text style={styles.authMessage}>
-            Faça login para acessar o dashboard
-          </Text>
-          <TouchableOpacity 
-            style={styles.authButton}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.authButtonText}>Fazer Login</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh}
-            enabled={isAuthenticated} // ← Só permite refresh se autenticado
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         <LinearGradient
           colors={["#872bb8", "#311aa4"]}
-          start={{ x: 1, y: 0 }}
+          start={{ x: 1.2, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
           <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.userWelcome}>Olá, {user?.name}!</Text>
-            </View>
+            <Text style={styles.title}>Dashboard</Text>
             <Ionicons name="cart-outline" size={28} color="#fff" />
           </View>
 
@@ -262,7 +177,7 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
 
-          <Text style={styles.sectionTitleWhite}>vendas recentes</Text>
+          <Text style={styles.sectionTitleWhite}>recente</Text>
 
           {loading ? (
             <ActivityIndicator
@@ -277,13 +192,8 @@ export default function DashboardScreen({ navigation }) {
               contentContainerStyle={styles.recentRow}
             >
               {recentSales.length === 0 ? (
-                <View style={styles.emptyRecent}>
-                  <Text style={{ color: "#fff", textAlign: 'center' }}>
-                    Nenhuma venda recente
-                  </Text>
-                  <Text style={{ color: "#fff", opacity: 0.7, fontSize: 12, marginTop: 5 }}>
-                    Suas vendas aparecerão aqui
-                  </Text>
+                <View style={{ padding: 10 }}>
+                  <Text style={{ color: "#fff" }}>Nenhuma venda recente</Text>
                 </View>
               ) : (
                 recentSales.map((s) => {
@@ -291,24 +201,20 @@ export default function DashboardScreen({ navigation }) {
                   const c = customersMap[s.customer_id] || null;
                   const clientName = c
                     ? c.name
-                    : s.customer_id ? `Cliente #${s.customer_id}` : "Venda Local";
+                    : `Cliente #${s.customer_id || "—"}`;
                   const phone = c ? c.phone : "";
                   return (
                     <View key={s.id} style={styles.recentCard}>
-                      <Text style={styles.client} numberOfLines={1}>
-                        {clientName}
-                      </Text>
-                      {phone ? (
-                        <Text style={styles.phone} numberOfLines={1}>
-                          {phone}
-                        </Text>
-                      ) : null}
+                      <Text style={styles.client}>{clientName}</Text>
+                      {phone ? <Text style={styles.phone}>{phone}</Text> : null}
                       <Text style={styles.amount}>
                         {formatBRL(s.total_amount)}
                       </Text>
-                      <Text style={styles.saleDate}>
+                      <Text
+                        style={{ fontSize: 12, color: "#666", marginTop: 6 }}
+                      >
                         {s.created_at
-                          ? new Date(s.created_at).toLocaleDateString('pt-BR')
+                          ? new Date(s.created_at).toLocaleString()
                           : ""}
                       </Text>
                     </View>
@@ -367,54 +273,14 @@ export default function DashboardScreen({ navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
+// Adicione os estilos que faltam
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f4fc",
+    backgroundColor: "#f5f5f5",
   },
   scrollContainer: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#7b2ff7",
-  },
-  authContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  authTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  authMessage: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 30,
-  },
-  authButton: {
-    backgroundColor: "#7b2ff7",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 10,
-  },
-  authButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
   },
   header: {
     padding: 20,
@@ -423,19 +289,13 @@ const styles = StyleSheet.create({
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     marginBottom: 20,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#fff",
-  },
-  userWelcome: {
-    fontSize: 14,
-    color: "#fff",
-    opacity: 0.8,
-    marginTop: 4,
   },
   summaryRow: {
     flexDirection: "row",
@@ -474,10 +334,6 @@ const styles = StyleSheet.create({
   recentRow: {
     paddingVertical: 10,
   },
-  emptyRecent: {
-    padding: 20,
-    alignItems: 'center',
-  },
   recentCard: {
     backgroundColor: "#fff",
     padding: 15,
@@ -504,11 +360,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
     color: "#7b2ff7",
-  },
-  saleDate: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 6,
   },
   mainButton: {
     backgroundColor: "#7b2ff7",
