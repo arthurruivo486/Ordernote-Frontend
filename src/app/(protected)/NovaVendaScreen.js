@@ -125,98 +125,97 @@ export default function NovaVendaScreen({ navigation }) {
     return produtos.reduce((total, produto) => total + (produto.subtotal || 0), 0);
   };
 
-  const finalizarVenda = async () => {
-    if (produtos.length === 0) {
-      Alert.alert("Atenção", "Adicione pelo menos um produto para finalizar a venda.");
-      return;
+  // NovaVendaScreen.js - ATUALIZADO
+const finalizarVenda = async () => {
+  if (produtos.length === 0) {
+    Alert.alert("Atenção", "Adicione pelo menos um produto para finalizar a venda.");
+    return;
+  }
+
+  if (!isAuthenticated) {
+    Alert.alert("Erro", "Usuário não autenticado. Faça login novamente.");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    console.log("🚀 Criando venda pendente para usuário:", user.id);
+
+    // ✅ 1. Criar o order
+    const orderData = {
+      table_number: tableNumber || null,
+      notes: observacoes,
+      status: 'open'
+    };
+
+    console.log("📋 Criando order:", orderData);
+    const orderResponse = await api.post("/order", orderData);
+    const orderId = orderResponse.data.orderId || orderResponse.data.id || orderResponse.data.order_id;
+    
+    if (!orderId) {
+      throw new Error("ID do pedido não retornado pela API");
     }
 
-    if (!isAuthenticated) {
-      Alert.alert("Erro", "Usuário não autenticado. Faça login novamente.");
-      return;
-    }
+    console.log("🎯 Order ID obtido:", orderId);
 
-    setLoading(true);
-    try {
-      console.log("🚀 Iniciando processo de venda para usuário:", user.id);
+    // ✅ 2. Criar a sale com status 'pending' (não finalizada ainda)
+    const saleData = {
+      order_id: orderId,
+      customer_id: clienteId || null,
+      total_amount: calcularTotal(),
+      payment_method: paymentMethod,
+      status: 'pending', // ← AGORA FICA COMO PENDENTE
+      items: produtos.map(produto => ({
+        product_id: produto.id,
+        quantity: produto.quantidade,
+        unit_price: produto.preco,
+        subtotal: produto.subtotal
+      }))
+    };
 
-      // ✅ 1. Primeiro criar o order
-      const orderData = {
-        table_number: tableNumber || null,
-        notes: observacoes,
-        status: 'open'
-      };
+    console.log("💰 Criando sale PENDENTE:", saleData);
+    const saleResponse = await api.post("/sales", saleData);
 
-      console.log("📋 Criando order:", orderData);
+    console.log("✅ Venda pendente criada com sucesso:", saleResponse.data);
 
-      const orderResponse = await api.post("/order", orderData);
-
-      if (orderResponse.data) {
-        console.log("✅ Order criada:", orderResponse.data);
-      }
-
-      // ✅ CORREÇÃO: A API retorna orderId (com I maiúsculo)
-      const orderId = orderResponse.data.orderId || orderResponse.data.id || orderResponse.data.order_id;
-      
-      if (!orderId) {
-        console.log("❌ Estrutura completa da resposta:", JSON.stringify(orderResponse.data, null, 2));
-        throw new Error("ID do pedido não retornado pela API");
-      }
-
-      console.log("🎯 Order ID obtido:", orderId);
-
-      // ✅ 2. Agora criar a sale - O user_id VEM DO TOKEN (não precisa enviar)
-      const saleData = {
-        order_id: orderId,
-        customer_id: clienteId || null,
-        total_amount: calcularTotal(),
-        payment_method: paymentMethod,
-        status: 'paid',
-        // ❌ NÃO enviar user_id - ele vem do token via middleware
-        items: produtos.map(produto => ({
-          product_id: produto.id,
-          quantity: produto.quantidade,
-          unit_price: produto.preco,
-          subtotal: produto.subtotal
-        }))
-      };
-
-      console.log("💰 Criando sale:", saleData);
-      console.log("👤 User ID (vindo do token):", user.id);
-
-      // ✅ 3. Criar a venda usando a API configurada (já com token)
-      const saleResponse = await api.post("/sales", saleData);
-
-      console.log("✅ Venda criada com sucesso:", saleResponse.data);
-
-      Alert.alert(
-        "Sucesso", 
-        "Venda realizada com sucesso!", 
-        [
-          { 
-            text: "OK", 
-            onPress: () => navigation.goBack() 
+    Alert.alert(
+      "Venda Aberta", 
+      "Venda iniciada com sucesso! Agora ela aparece nos Pedidos em Andamento.",
+      [
+        { 
+          text: "Continuar Vendendo", 
+          onPress: () => {
+            // Limpar o formulário para nova venda
+            setProdutos([]);
+            setTableNumber("");
+            setObservacoes("");
+            setClienteId(null);
           }
-        ]
-      );
-      
-    } catch (error) {
-      console.error("❌ Erro completo na venda:", error);
-      console.error("❌ Detalhes do erro:", error.response?.data);
-      
-      let errorMessage = "Não foi possível finalizar a venda.";
-      
-      if (error.response?.status === 401) {
-        errorMessage = "Sessão expirada. Faça login novamente.";
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      }
-      
-      Alert.alert("Erro", errorMessage);
-    } finally {
-      setLoading(false);
+        },
+        { 
+          text: "Ver Pedidos", 
+          onPress: () => navigation.navigate('Vendas')
+        }
+      ]
+    );
+    
+  } catch (error) {
+    console.error("❌ Erro ao criar venda pendente:", error);
+    console.error("❌ Detalhes do erro:", error.response?.data);
+    
+    let errorMessage = "Não foi possível iniciar a venda.";
+    
+    if (error.response?.status === 401) {
+      errorMessage = "Sessão expirada. Faça login novamente.";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
     }
-  };
+    
+    Alert.alert("Erro", errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ✅ Mostrar informações do usuário logado
   const clienteSelecionado = clientes.find(c => c.id === clienteId);

@@ -21,9 +21,50 @@ export default function SaleScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [sales, setSales] = useState([]);
   const [customersMap, setCustomersMap] = useState({});
-  const [showModal, setShowModal] = useState(false);
+  const [showSaleTypeModal, setShowSaleTypeModal] = useState(false);
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [showSaleDetails, setShowSaleDetails] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    dateRange: 'today',
+    paymentMethod: 'all',
+    minAmount: '',
+    maxAmount: ''
+  });
 
   const { user, token, isAuthenticated } = useAuth();
+
+  const [saleTypes] = useState([
+    {
+      id: 'local',
+      name: 'Venda Local',
+      description: 'Venda para consumo no local',
+      icon: 'storefront-outline',
+      color: '#7b2ff7'
+    },
+    {
+      id: 'delivery',
+      name: 'Delivery',
+      description: 'Entrega no endereço do cliente',
+      icon: 'bicycle-outline',
+      color: '#FF6B35'
+    },
+    {
+      id: 'takeaway',
+      name: 'Takeaway',
+      description: 'Cliente retira no local',
+      icon: 'bag-handle-outline',
+      color: '#4CAF50'
+    },
+    {
+      id: 'reservation',
+      name: 'Reserva',
+      description: 'Reserva para data futura',
+      icon: 'calendar-outline',
+      color: '#FFA500'
+    }
+  ]);
 
   // Busca vendas e clientes
   const fetchData = useCallback(async () => {
@@ -39,10 +80,6 @@ export default function SaleScreen({ navigation }) {
 
       const salesResponse = await api.get("/sales");
       
-      if (salesResponse.data) {
-        console.log("✅ Vendas carregadas:", salesResponse.data);
-      }
-
       let salesArray = [];
       const salesData = salesResponse.data;
 
@@ -57,10 +94,6 @@ export default function SaleScreen({ navigation }) {
 
       const custResponse = await api.get("/customers");
       
-      if (custResponse.data) {
-        console.log("✅ Clientes carregados:", custResponse.data);
-      }
-
       const cmap = {};
       const custData = custResponse.data;
       const customersArray = Array.isArray(custData)
@@ -134,14 +167,130 @@ export default function SaleScreen({ navigation }) {
     fetchData();
   }, [fetchData, isAuthenticated]);
 
+  // Função para aplicar filtros
+  const applyFilters = () => {
+    let filteredSales = sales;
+
+    // Filtro por status
+    if (filters.status !== 'all') {
+      filteredSales = filteredSales.filter(sale => sale.status === filters.status);
+    }
+
+    // Filtro por data
+    if (filters.dateRange !== 'all') {
+      const today = new Date();
+      filteredSales = filteredSales.filter(sale => {
+        const saleDate = new Date(sale.created_at);
+        switch(filters.dateRange) {
+          case 'today':
+            return saleDate.toDateString() === today.toDateString();
+          case 'week':
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return saleDate >= weekAgo;
+          case 'month':
+            const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+            return saleDate >= monthAgo;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Filtro por método de pagamento
+    if (filters.paymentMethod !== 'all') {
+      filteredSales = filteredSales.filter(sale => sale.payment_method === filters.paymentMethod);
+    }
+
+    // Filtro por valor
+    if (filters.minAmount) {
+      filteredSales = filteredSales.filter(sale => sale.total_amount >= parseFloat(filters.minAmount));
+    }
+    if (filters.maxAmount) {
+      filteredSales = filteredSales.filter(sale => sale.total_amount <= parseFloat(filters.maxAmount));
+    }
+
+    return filteredSales;
+  };
+
+  const filteredSales = applyFilters();
+
   // Separar pedidos por status
-  const pedidosEmAndamento = sales.filter(sale => 
+  const pedidosEmAndamento = filteredSales.filter(sale => 
     sale.status === 'pending' || sale.status === 'processing' || !sale.status
   ).slice(0, 6);
 
-  const pedidosFinalizados = sales.filter(sale => 
+  const pedidosFinalizados = filteredSales.filter(sale => 
     sale.status === 'paid' || sale.status === 'completed' || sale.status === 'delivered'
   ).slice(0, 6);
+
+  // Função para finalizar uma venda pendente
+  const finalizarVendaPendente = async (sale) => {
+    try {
+      console.log("💰 Finalizando venda:", sale.id);
+      
+      const updateData = {
+        status: 'paid',
+        payment_method: sale.payment_method || 'cash'
+      };
+
+      const response = await api.patch(`/sales/${sale.id}`, updateData);
+      
+      if (response.data) {
+        console.log("✅ Venda finalizada com sucesso:", response.data);
+        
+        // Atualizar a lista local
+        setSales(prevSales => 
+          prevSales.map(s => 
+            s.id === sale.id 
+              ? { ...s, status: 'paid', updated_at: new Date().toISOString() }
+              : s
+          )
+        );
+        
+        setShowSaleDetails(false);
+        Alert.alert("Sucesso", "Venda finalizada com sucesso!");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao finalizar venda:", error);
+      Alert.alert("Erro", "Não foi possível finalizar a venda.");
+    }
+  };
+
+  // Função para editar uma venda pendente
+  const editarVendaPendente = (sale) => {
+    setSelectedSale(sale);
+    setShowSaleDetails(false);
+    // Navegar para tela de edição (podemos reutilizar a NovaVendaScreen com dados)
+    navigation.navigate('EditarVenda', { sale });
+  };
+
+  // Função para visualizar detalhes da venda
+  const verDetalhesVenda = (sale) => {
+    setSelectedSale(sale);
+    setShowSaleDetails(true);
+  };
+
+  // Função para lidar com a seleção do tipo de venda
+  const handleSaleTypeSelect = (saleType) => {
+    setShowSaleTypeModal(false);
+    
+    switch(saleType.id) {
+      case 'local':
+        navigation.navigate('NovaVenda', { saleType: 'local' });
+        break;
+      case 'delivery':
+        navigation.navigate('NovaDelivery', { saleType: 'delivery' });
+        break;
+      case 'takeaway':
+        navigation.navigate('NovaVenda', { saleType: 'takeaway' });
+        break;
+      case 'reservation':
+        navigation.navigate('NovaReserva', { saleType: 'reservation' });
+        break;
+      default:
+        navigation.navigate('NovaVenda', { saleType: 'local' });
+    }
+  };
 
   const formatBRL = (value) => {
     const n = Number(value || 0);
@@ -170,14 +319,10 @@ export default function SaleScreen({ navigation }) {
     const rows = [];
     for (let i = 0; i < pedidos.length; i += 3) {
       const rowPedidos = pedidos.slice(i, i + 3);
-      const customer = customersMap[pedidos[i]?.customer_id] || null;
-      const clientName = customer
-        ? customer.name
-        : pedidos[i]?.customer_id ? `Cliente #${pedidos[i]?.customer_id}` : "Venda Local";
-
+      
       rows.push(
         <View key={i} style={styles.pedidosRow}>
-          {rowPedidos.map((pedido, index) => {
+          {rowPedidos.map((pedido) => {
             const pedidoCustomer = customersMap[pedido.customer_id] || null;
             const pedidoClientName = pedidoCustomer
               ? pedidoCustomer.name
@@ -190,9 +335,7 @@ export default function SaleScreen({ navigation }) {
                   styles.pedidoCard,
                   tipo === 'andamento' ? styles.pedidoAndamento : styles.pedidoFinalizado
                 ]}
-                onPress={() => Alert.alert("Detalhes da Venda", 
-                  `Cliente: ${pedidoClientName}\nValor: ${formatBRL(pedido.total_amount)}\nStatus: ${pedido.status}\nData: ${new Date(pedido.created_at).toLocaleDateString('pt-BR')}`
-                )}
+                onPress={() => verDetalhesVenda(pedido)}
               >
                 <View style={styles.pedidoHeader}>
                   <Text style={styles.pedidoNumero}>#{pedido.id}</Text>
@@ -211,6 +354,11 @@ export default function SaleScreen({ navigation }) {
                 <Text style={styles.pedidoData}>
                   {pedido.created_at ? new Date(pedido.created_at).toLocaleDateString('pt-BR') : 'Data não disponível'}
                 </Text>
+                {tipo === 'andamento' && (
+                  <View style={styles.pedidoBadge}>
+                    <Text style={styles.pedidoBadgeText}>PENDENTE</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -224,6 +372,303 @@ export default function SaleScreen({ navigation }) {
     }
     return rows;
   };
+
+  // Modal de seleção de tipo de venda
+  const renderSaleTypeModal = () => (
+    <Modal
+      visible={showSaleTypeModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowSaleTypeModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Selecione o tipo de venda</Text>
+            <TouchableOpacity 
+              onPress={() => setShowSaleTypeModal(false)}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.saleTypesContainer}>
+            {saleTypes.map((type) => (
+              <TouchableOpacity 
+                key={type.id}
+                style={[styles.saleTypeButton, { borderLeftColor: type.color }]}
+                onPress={() => handleSaleTypeSelect(type)}
+              >
+                <View style={styles.saleTypeIconContainer}>
+                  <Ionicons 
+                    name={type.icon} 
+                    size={28} 
+                    color={type.color} 
+                  />
+                </View>
+                <View style={styles.saleTypeInfo}>
+                  <Text style={styles.saleTypeName}>{type.name}</Text>
+                  <Text style={styles.saleTypeDescription}>{type.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <TouchableOpacity 
+            style={styles.modalCancelButton}
+            onPress={() => setShowSaleTypeModal(false)}
+          >
+            <Text style={styles.modalCancelText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Modal de detalhes da venda
+  const renderSaleDetailsModal = () => {
+    if (!selectedSale) return null;
+
+    const customer = customersMap[selectedSale.customer_id] || null;
+    const clientName = customer
+      ? customer.name
+      : selectedSale.customer_id ? `Cliente #${selectedSale.customer_id}` : "Venda Local";
+
+    const isPending = selectedSale.status === 'pending';
+
+    return (
+      <Modal
+        visible={showSaleDetails}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSaleDetails(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isPending ? 'Venda Pendente' : 'Venda Finalizada'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowSaleDetails(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Número do Pedido:</Text>
+                <Text style={styles.detailValue}>#{selectedSale.id}</Text>
+              </View>
+
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Cliente:</Text>
+                <Text style={styles.detailValue}>{clientName}</Text>
+              </View>
+
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Valor Total:</Text>
+                <Text style={styles.detailValue}>{formatBRL(selectedSale.total_amount)}</Text>
+              </View>
+
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Status:</Text>
+                <View style={[
+                  styles.statusBadge,
+                  isPending ? styles.statusPending : styles.statusPaid
+                ]}>
+                  <Text style={styles.statusText}>
+                    {isPending ? 'PENDENTE' : 'FINALIZADA'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Data de Criação:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedSale.created_at ? new Date(selectedSale.created_at).toLocaleString('pt-BR') : 'N/A'}
+                </Text>
+              </View>
+
+              {selectedSale.payment_method && (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Forma de Pagamento:</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedSale.payment_method === 'cash' ? 'Dinheiro' :
+                     selectedSale.payment_method === 'card' ? 'Cartão' :
+                     selectedSale.payment_method === 'pix' ? 'PIX' : selectedSale.payment_method}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              {isPending ? (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.modalButton, styles.editButton]}
+                    onPress={() => editarVendaPendente(selectedSale)}
+                  >
+                    <Ionicons name="pencil-outline" size={20} color="#fff" />
+                    <Text style={styles.modalButtonText}>Editar Venda</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.modalButton, styles.finalizeButton]}
+                    onPress={() => finalizarVendaPendente(selectedSale)}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                    <Text style={styles.modalButtonText}>Finalizar Venda</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.closeButton]}
+                  onPress={() => setShowSaleDetails(false)}
+                >
+                  <Text style={styles.modalButtonText}>Fechar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Modal de filtros
+  const renderFilterModal = () => (
+    <Modal
+      visible={filterModalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setFilterModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.filterModalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Filtrar Vendas</Text>
+            <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.filterContent}>
+            {/* Filtro de Status */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Status</Text>
+              <View style={styles.filterOptions}>
+                {[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'pending', label: 'Pendentes' },
+                  { value: 'paid', label: 'Pagos' },
+                  { value: 'cancelled', label: 'Cancelados' }
+                ].map(status => (
+                  <TouchableOpacity
+                    key={status.value}
+                    style={[
+                      styles.filterOption,
+                      filters.status === status.value && styles.filterOptionSelected
+                    ]}
+                    onPress={() => setFilters(prev => ({ ...prev, status: status.value }))}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      filters.status === status.value && styles.filterOptionTextSelected
+                    ]}>
+                      {status.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Filtro de Período */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Período</Text>
+              <View style={styles.filterOptions}>
+                {[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'today', label: 'Hoje' },
+                  { value: 'week', label: 'Esta semana' },
+                  { value: 'month', label: 'Este mês' }
+                ].map(period => (
+                  <TouchableOpacity
+                    key={period.value}
+                    style={[
+                      styles.filterOption,
+                      filters.dateRange === period.value && styles.filterOptionSelected
+                    ]}
+                    onPress={() => setFilters(prev => ({ ...prev, dateRange: period.value }))}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      filters.dateRange === period.value && styles.filterOptionTextSelected
+                    ]}>
+                      {period.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Filtro de Método de Pagamento */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Método de Pagamento</Text>
+              <View style={styles.filterOptions}>
+                {[
+                  { value: 'all', label: 'Todos' },
+                  { value: 'cash', label: 'Dinheiro' },
+                  { value: 'card', label: 'Cartão' },
+                  { value: 'pix', label: 'PIX' }
+                ].map(method => (
+                  <TouchableOpacity
+                    key={method.value}
+                    style={[
+                      styles.filterOption,
+                      filters.paymentMethod === method.value && styles.filterOptionSelected
+                    ]}
+                    onPress={() => setFilters(prev => ({ ...prev, paymentMethod: method.value }))}
+                  >
+                    <Text style={[
+                      styles.filterOptionText,
+                      filters.paymentMethod === method.value && styles.filterOptionTextSelected
+                    ]}>
+                      {method.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.filterActions}>
+            <TouchableOpacity 
+              style={[styles.filterButton, styles.clearButton]}
+              onPress={() => setFilters({
+                status: 'all',
+                dateRange: 'today',
+                paymentMethod: 'all',
+                minAmount: '',
+                maxAmount: ''
+              })}
+            >
+              <Text style={styles.clearButtonText}>Limpar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, styles.applyButton]}
+              onPress={() => {
+                setFilterModalVisible(false);
+              }}
+            >
+              <Text style={styles.applyButtonText}>Aplicar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (loading && !isAuthenticated) {
     return (
@@ -268,7 +713,7 @@ export default function SaleScreen({ navigation }) {
           />
         }
       >
-        {/* PARTE ROXA SIMPLIFICADA */}
+        {/* HEADER */}
         <LinearGradient
           colors={["#872bb8", "#311aa4"]}
           start={{ x: 1, y: 0 }}
@@ -277,7 +722,20 @@ export default function SaleScreen({ navigation }) {
         >
           <View style={styles.headerTop}>
             <Text style={styles.title}>Vendas</Text>
-            <Ionicons name="cart-outline" size={28} color="#fff" />
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={styles.filterButtonHeader}
+                onPress={() => setFilterModalVisible(true)}
+              >
+                <Ionicons name="filter" size={20} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.statsButton}
+                onPress={() => navigation.navigate('VendasStats')}
+              >
+                <Ionicons name="stats-chart" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.summaryRow}>
@@ -305,20 +763,18 @@ export default function SaleScreen({ navigation }) {
           )}
         </LinearGradient>
 
-        {/* CONTEÚDO PRINCIPAL - BOTÕES LADO A LADO */}
+        {/* CONTEÚDO PRINCIPAL */}
         <View style={styles.salesContent}>
           <View style={styles.buttonsRow}>
-            {/* Botão Nova Venda */}
             <TouchableOpacity
               style={styles.mainButton}
-              onPress={() => setShowModal(true)}
+              onPress={() => setShowSaleTypeModal(true)}
             >
               <Ionicons name="add-circle-outline" size={32} color="#fff" />
               <Text style={styles.mainButtonText}>nova venda</Text>
               <Text style={styles.mainSubText}>iniciar uma venda</Text>
             </TouchableOpacity>
 
-            {/* Botão Histórico com ícone de relógio */}
             <TouchableOpacity
               style={styles.historyButton}
               onPress={() => navigation.navigate("HistoricoVendas")}
@@ -334,9 +790,7 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Pedidos em Andamento</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('PedidosAndamento')}>
-                <Text style={styles.verTodosText}>Ver todos</Text>
-              </TouchableOpacity>
+              <Text style={styles.pedidosCount}>({pedidosEmAndamento.length})</Text>
             </View>
             
             {pedidosEmAndamento.length > 0 ? (
@@ -345,6 +799,9 @@ export default function SaleScreen({ navigation }) {
               <View style={styles.emptyState}>
                 <Ionicons name="time-outline" size={40} color="#ccc" />
                 <Text style={styles.emptyStateText}>Nenhum pedido em andamento</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Clique em "Nova Venda" para começar
+                </Text>
               </View>
             )}
           </View>
@@ -353,9 +810,7 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Pedidos Finalizados</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('PedidosFinalizados')}>
-                <Text style={styles.verTodosText}>Ver todos</Text>
-              </TouchableOpacity>
+              <Text style={styles.pedidosCount}>({pedidosFinalizados.length})</Text>
             </View>
             
             {pedidosFinalizados.length > 0 ? (
@@ -373,49 +828,13 @@ export default function SaleScreen({ navigation }) {
       </ScrollView>
 
       {/* MODAL PARA ESCOLHER TIPO DE VENDA */}
-      <Modal
-        visible={showModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecione o tipo de venda</Text>
-            
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={() => {
-                setShowModal(false);
-                navigation.navigate('NovaVenda');
-              }}
-            >
-              <Ionicons name="storefront-outline" size={24} color="#7b2ff7" />
-              <Text style={styles.modalButtonText}>Venda Local</Text>
-              <Text style={styles.modalButtonSubtext}>Venda para consumo no local</Text>
-            </TouchableOpacity>
+      {renderSaleTypeModal()}
 
-            <TouchableOpacity 
-              style={styles.modalButton}
-              onPress={() => {
-                setShowModal(false);
-                navigation.navigate('NovaDelivery');
-              }}
-            >
-              <Ionicons name="bicycle-outline" size={24} color="#7b2ff7" />
-              <Text style={styles.modalButtonText}>Delivery</Text>
-              <Text style={styles.modalButtonSubtext}>Entrega no endereço do cliente</Text>
-            </TouchableOpacity>
+      {/* MODAL DE DETALHES DA VENDA */}
+      {renderSaleDetailsModal()}
 
-            <TouchableOpacity 
-              style={styles.modalCancelButton}
-              onPress={() => setShowModal(false)}
-            >
-              <Text style={styles.modalCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* MODAL DE FILTROS */}
+      {renderFilterModal()}
     </SafeAreaView>
   );
 }
@@ -444,6 +863,18 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: "#fff",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  filterButtonHeader: {
+    padding: 8,
+    marginLeft: 10,
+  },
+  statsButton: {
+    padding: 8,
+    marginLeft: 5,
   },
   summaryRow: {
     flexDirection: "row",
@@ -542,10 +973,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
-  verTodosText: {
-    color: "#7b2ff7",
+  pedidosCount: {
     fontSize: 14,
-    fontWeight: "500",
+    color: '#666',
+    fontWeight: '500',
   },
   pedidosRow: {
     flexDirection: "row",
@@ -604,6 +1035,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#999",
   },
+  pedidoBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  pedidoBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#856404',
+  },
   emptyState: {
     alignItems: "center",
     padding: 40,
@@ -614,6 +1059,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "#999",
     fontSize: 14,
+  },
+  emptyStateSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
   },
   modalOverlay: {
     flex: 1,
@@ -629,33 +1079,58 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
     color: '#333',
   },
-  modalButton: {
-    backgroundColor: '#f8f4ff',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#e8e0ff',
+  closeButton: {
+    padding: 4,
+  },
+  saleTypesContainer: {
+    maxHeight: 400,
+  },
+  saleTypeButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  modalButtonText: {
-    fontSize: 18,
+  saleTypeIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f8f4ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  saleTypeInfo: {
+    flex: 1,
+  },
+  saleTypeName: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#7b2ff7',
-    marginTop: 8,
+    color: '#333',
+    marginBottom: 4,
   },
-  modalButtonSubtext: {
+  saleTypeDescription: {
     fontSize: 12,
     color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
   },
   modalCancelButton: {
     padding: 16,
@@ -667,6 +1142,143 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontWeight: '500',
+  },
+  modalBody: {
+    maxHeight: 400,
+  },
+  detailSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPending: {
+    backgroundColor: '#FFF3CD',
+  },
+  statusPaid: {
+    backgroundColor: '#D1ECF1',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginHorizontal: 4,
+  },
+  editButton: {
+    backgroundColor: '#FFA500',
+  },
+  finalizeButton: {
+    backgroundColor: '#4CAF50',
+  },
+  closeButton: {
+    backgroundColor: '#7b2ff7',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  // Estilos para filtros
+  filterModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  filterContent: {
+    maxHeight: 400,
+  },
+  filterSection: {
+    marginBottom: 20,
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  filterOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  filterOptionSelected: {
+    backgroundColor: '#7b2ff7',
+  },
+  filterOptionText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  filterOptionTextSelected: {
+    color: '#fff',
+  },
+  filterActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 16,
+  },
+  filterButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  clearButton: {
+    backgroundColor: '#f5f5f5',
+  },
+  applyButton: {
+    backgroundColor: '#7b2ff7',
+  },
+  clearButtonText: {
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
   // Estilos para autenticação
   loadingContainer: {

@@ -13,6 +13,7 @@ import ProductScreen from './(protected)/ProductScreen';
 import CustomerScreen from './(protected)/CustomerScreen';
 import NovaVendaScreen from './(protected)/NovaVendaScreen';
 import NovaDeliveryScreen from './(protected)/NovaDeliveryScreen';
+import EditarVendaScreen from './(protected)/EditarVendaScreen';
 import LoginScreen from './LoginScreen';
 
 const Tab = createBottomTabNavigator();
@@ -26,6 +27,7 @@ function SaleStackNavigator() {
       <SaleStack.Screen name="VendasMain" component={SaleScreen} />
       <SaleStack.Screen name="NovaVenda" component={NovaVendaScreen} />
       <SaleStack.Screen name="NovaDelivery" component={NovaDeliveryScreen} />
+      <SaleStack.Screen name="EditarVenda" component={EditarVendaScreen} />
     </SaleStack.Navigator>
   );
 }

@@ -9,24 +9,25 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../context/AuthContext"; // ← Import do contexto
-import api from "../../services/api"; // ← Import da API configurada
+import { useAuth } from "../../context/AuthContext";
+import api from "../../services/api";
 
 export default function UserScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [changePasswordModal, setChangePasswordModal] = useState(false);
+  const [privacyModal, setPrivacyModal] = useState(false);
+  const [supportModal, setSupportModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // ✅ Usar o contexto de autenticação
   const { user, token, isAuthenticated, logout } = useAuth();
 
-  // ✅ Função para fazer logout
   const handleLogout = () => {
     Alert.alert(
       "Sair da Conta",
@@ -43,7 +44,6 @@ export default function UserScreen({ navigation }) {
             try {
               console.log("🚪 Fazendo logout...");
               await logout();
-              // Navegar para a tela de login após logout
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],
@@ -58,7 +58,6 @@ export default function UserScreen({ navigation }) {
     );
   };
 
-  // ✅ Função para trocar de conta (logout + navegar para login)
   const handleSwitchAccount = () => {
     Alert.alert(
       "Trocar de Conta",
@@ -74,7 +73,6 @@ export default function UserScreen({ navigation }) {
             try {
               console.log("🔄 Trocando de conta...");
               await logout();
-              // Navegar para a tela de login
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],
@@ -89,7 +87,6 @@ export default function UserScreen({ navigation }) {
     );
   };
 
-  // ✅ Função para alterar senha
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert("Erro", "Preencha todos os campos");
@@ -109,8 +106,6 @@ export default function UserScreen({ navigation }) {
     setLoading(true);
     try {
       console.log("🔐 Alterando senha...");
-
-      // ✅ Chamar API para alterar senha
       const response = await api.put("/user/change-password", {
         currentPassword,
         newPassword
@@ -138,7 +133,23 @@ export default function UserScreen({ navigation }) {
     }
   };
 
-  // ✅ Mostrar mensagem se não estiver autenticado
+  const handleContactSupport = () => {
+    Linking.openURL(`mailto:suporte@ordernote.com?subject=Suporte - ${user?.name || "Usuário"}`);
+  };
+
+  const handleOpenFAQ = () => {
+    // Aqui você pode navegar para uma tela de FAQ ou abrir um link
+    Alert.alert("FAQ", "Em breve disponível!");
+  };
+
+  const handlePrivacyPolicy = () => {
+    Linking.openURL("https://seusite.com/politica-de-privacidade");
+  };
+
+  const handleTermsOfService = () => {
+    Linking.openURL("https://seusite.com/termos-de-uso");
+  };
+
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
@@ -190,20 +201,6 @@ export default function UserScreen({ navigation }) {
           </View>
         </LinearGradient>
 
-        {/* Estatísticas Rápidas */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Ionicons name="calendar" size={24} color="#7b2ff7" />
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Vendas Hoje</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="trending-up" size={24} color="#4CAF50" />
-            <Text style={styles.statNumber}>R$ 1.245</Text>
-            <Text style={styles.statLabel}>Total Hoje</Text>
-          </View>
-        </View>
-
         {/* Menu de Opções */}
         <View style={styles.menuContainer}>
           <Text style={styles.menuTitle}>Configurações da Conta</Text>
@@ -220,17 +217,11 @@ export default function UserScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
 
-          {/* Notificações */}
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="notifications" size={22} color="#FF9800" />
-              <Text style={styles.menuItemText}>Notificações</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ccc" />
-          </TouchableOpacity>
-
           {/* Privacidade */}
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => setPrivacyModal(true)}
+          >
             <View style={styles.menuItemLeft}>
               <Ionicons name="shield-checkmark" size={22} color="#4CAF50" />
               <Text style={styles.menuItemText}>Privacidade e Segurança</Text>
@@ -239,7 +230,10 @@ export default function UserScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Ajuda */}
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity 
+            style={styles.menuItem}
+            onPress={() => setSupportModal(true)}
+          >
             <View style={styles.menuItemLeft}>
               <Ionicons name="help-circle" size={22} color="#2196F3" />
               <Text style={styles.menuItemText}>Ajuda e Suporte</Text>
@@ -354,11 +348,160 @@ export default function UserScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Privacidade */}
+      <Modal
+        visible={privacyModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setPrivacyModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Privacidade e Segurança</Text>
+              <TouchableOpacity onPress={() => setPrivacyModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.privacySection}>
+                <Ionicons name="shield-checkmark" size={48} color="#4CAF50" style={styles.privacyIcon} />
+                <Text style={styles.privacyTitle}>Sua privacidade é importante</Text>
+                <Text style={styles.privacyDescription}>
+                  Nos comprometemos a proteger seus dados pessoais e garantir a segurança das suas informações.
+                </Text>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.privacyOption}
+                onPress={handlePrivacyPolicy}
+              >
+                <View style={styles.privacyOptionLeft}>
+                  <Ionicons name="document-text" size={22} color="#666" />
+                  <Text style={styles.privacyOptionText}>Política de Privacidade</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#ccc" />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.privacyOption}
+                onPress={handleTermsOfService}
+              >
+                <View style={styles.privacyOptionLeft}>
+                  <Ionicons name="reader" size={22} color="#666" />
+                  <Text style={styles.privacyOptionText}>Termos de Uso</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#ccc" />
+              </TouchableOpacity>
+
+              <View style={styles.securityInfo}>
+                <Text style={styles.securityTitle}>Medidas de Segurança</Text>
+                <View style={styles.securityItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.securityText}>Dados criptografados</Text>
+                </View>
+                <View style={styles.securityItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.securityText}>Autenticação segura</Text>
+                </View>
+                <View style={styles.securityItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                  <Text style={styles.securityText}>Backups regulares</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => setPrivacyModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Fechar</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de Ajuda e Suporte */}
+      <Modal
+        visible={supportModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSupportModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ajuda e Suporte</Text>
+              <TouchableOpacity onPress={() => setSupportModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.supportSection}>
+                <Ionicons name="help-circle" size={48} color="#2196F3" style={styles.supportIcon} />
+                <Text style={styles.supportTitle}>Como podemos ajudar?</Text>
+                <Text style={styles.supportDescription}>
+                  Estamos aqui para responder suas dúvidas e resolver qualquer problema.
+                </Text>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.supportOption}
+                onPress={handleContactSupport}
+              >
+                <View style={styles.supportOptionLeft}>
+                  <Ionicons name="mail" size={22} color="#666" />
+                  <View>
+                    <Text style={styles.supportOptionText}>Contatar Suporte</Text>
+                    <Text style={styles.supportOptionSubtext}>Respondemos em até 24h</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#ccc" />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.supportOption}
+                onPress={handleOpenFAQ}
+              >
+                <View style={styles.supportOptionLeft}>
+                  <Ionicons name="help-buoy" size={22} color="#666" />
+                  <View>
+                    <Text style={styles.supportOptionText}>Perguntas Frequentes</Text>
+                    <Text style={styles.supportOptionSubtext}>Encontre respostas rápidas</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#ccc" />
+              </TouchableOpacity>
+
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactTitle}>Informações de Contato</Text>
+                <View style={styles.contactItem}>
+                  <Ionicons name="time" size={16} color="#666" />
+                  <Text style={styles.contactText}>Segunda a Sexta: 9h às 18h</Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <Ionicons name="mail" size={16} color="#666" />
+                  <Text style={styles.contactText}>suporte@ordernote.com</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.modalCancelButton}
+                onPress={() => setSupportModal(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Fechar</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -452,34 +595,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 20,
-  },
-  statCard: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 16,
-    alignItems: "center",
-    flex: 1,
-    marginHorizontal: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginVertical: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
   },
   menuContainer: {
     backgroundColor: "#fff",
@@ -604,5 +719,138 @@ const styles = StyleSheet.create({
   modalCancelButtonText: {
     color: "#666",
     fontSize: 16,
+  },
+  // Privacy Styles
+  privacySection: {
+    alignItems: "center",
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    marginBottom: 20,
+  },
+  privacyIcon: {
+    marginBottom: 15,
+  },
+  privacyTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  privacyDescription: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  privacyOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  privacyOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  privacyOptionText: {
+    fontSize: 16,
+    color: "#333",
+    marginLeft: 12,
+  },
+  securityInfo: {
+    backgroundColor: "#f8f9fa",
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 20,
+  },
+  securityTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+  },
+  securityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  securityText: {
+    fontSize: 14,
+    color: "#666",
+    marginLeft: 8,
+  },
+  // Support Styles
+  supportSection: {
+    alignItems: "center",
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+    marginBottom: 20,
+  },
+  supportIcon: {
+    marginBottom: 15,
+  },
+  supportTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  supportDescription: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  supportOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  supportOptionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  supportOptionText: {
+    fontSize: 16,
+    color: "#333",
+    marginLeft: 12,
+  },
+  supportOptionSubtext: {
+    fontSize: 12,
+    color: "#999",
+    marginLeft: 12,
+    marginTop: 2,
+  },
+  contactInfo: {
+    backgroundColor: "#f8f9fa",
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 20,
+  },
+  contactTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+  },
+  contactItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  contactText: {
+    fontSize: 14,
+    color: "#666",
+    marginLeft: 8,
   },
 });
