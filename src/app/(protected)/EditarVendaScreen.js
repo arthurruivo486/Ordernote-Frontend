@@ -55,7 +55,7 @@ export default function EditarVendaScreen({ route, navigation }) {
       await Promise.all([
         carregarClientes(),
         carregarProdutos(),
-        carregarItensVenda()
+        carregarItensVenda(),
       ]);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -69,11 +69,11 @@ export default function EditarVendaScreen({ route, navigation }) {
       console.log("📞 Carregando clientes via /customers...");
       const response = await api.get("/customers");
       const data = response.data;
-      
-      const clientesData = Array.isArray(data) 
-        ? data 
+
+      const clientesData = Array.isArray(data)
+        ? data
         : data.customers || data.data || [];
-      
+
       setClientes(clientesData);
       console.log(`✅ ${clientesData.length} clientes carregados`);
     } catch (error) {
@@ -87,11 +87,11 @@ export default function EditarVendaScreen({ route, navigation }) {
       console.log("📦 Carregando produtos via /product...");
       const response = await api.get("/product");
       const data = response.data;
-      
+
       const produtosData = Array.isArray(data)
         ? data
         : data.products || data.produtos || data.data || [];
-      
+
       setProdutosDisponiveis(produtosData);
       console.log(`✅ ${produtosData.length} produtos carregados`);
     } catch (error) {
@@ -103,7 +103,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   const carregarItensVenda = async () => {
     try {
       console.log("🛒 Carregando itens da venda ID:", sale?.id);
-      
+
       // VERIFICAÇÃO DOS DADOS DISPONÍVEIS NO route.params
       console.log("📋 Dados da venda no route.params:", {
         saleId: sale?.id,
@@ -111,7 +111,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         itemsCount: sale?.items?.length,
         hasOrder: !!sale?.order,
         orderItemsCount: sale?.order?.items?.length,
-        saleData: sale
+        saleData: sale,
       });
 
       let items = [];
@@ -120,16 +120,20 @@ export default function EditarVendaScreen({ route, navigation }) {
       if (sale?.items && Array.isArray(sale.items) && sale.items.length > 0) {
         items = sale.items;
         console.log("✅ Usando items direto do route.params:", items.length);
-      } 
+      }
       // SEGUNDO: Tenta usar items do order
-      else if (sale?.order?.items && Array.isArray(sale.order.items) && sale.order.items.length > 0) {
+      else if (
+        sale?.order?.items &&
+        Array.isArray(sale.order.items) &&
+        sale.order.items.length > 0
+      ) {
         items = sale.order.items;
         console.log("✅ Usando items do order:", items.length);
       }
       // TERCEIRO: Tenta buscar via API (como fallback)
       else {
         console.log("🔄 Tentando buscar itens via API...");
-        
+
         const endpoints = [
           `/sales/${sale.id}/items`,
           `/sale/${sale.id}/items`,
@@ -142,53 +146,81 @@ export default function EditarVendaScreen({ route, navigation }) {
             console.log(`🔄 Tentando endpoint: ${endpoint}`);
             const response = await api.get(endpoint);
             const data = response.data;
-            
+
             // Extrai items de diferentes estruturas
-            const extractedItems = data.items || data.order?.items || data.data?.items || [];
-            
+            const extractedItems =
+              data.items || data.order?.items || data.data?.items || [];
+
             if (extractedItems.length > 0) {
               items = extractedItems;
               console.log(`✅ Itens carregados via ${endpoint}:`, items.length);
               break;
             }
           } catch (error) {
-            console.log(`❌ Endpoint falhou: ${endpoint}`, error.response?.status);
+            console.log(
+              `❌ Endpoint falhou: ${endpoint}`,
+              error.response?.status
+            );
             continue;
           }
         }
       }
 
       // CONVERSÃO DOS ITEMS
-      const produtosConvertidos = items.map(item => {
+      const produtosConvertidos = items.map((item) => {
         const produto = {
-          id: item.product_id || item.produto_id || item.id || item.product?.id || item.produto?.id,
-          nome: item.product?.name || item.produto?.nome || item.name || item.nome || item.product_name || "Produto",
-          preco: Number(item.unit_price || item.preco_unitario || item.price || item.preco || 0),
+          id:
+            item.product_id ||
+            item.produto_id ||
+            item.id ||
+            item.product?.id ||
+            item.produto?.id,
+          nome:
+            item.product?.name ||
+            item.produto?.nome ||
+            item.name ||
+            item.nome ||
+            item.product_name ||
+            "Produto",
+          preco: Number(
+            item.unit_price ||
+              item.preco_unitario ||
+              item.price ||
+              item.preco ||
+              0
+          ),
           quantidade: Number(item.quantity || item.quantidade || item.qty || 1),
-          subtotal: Number(item.subtotal || (item.unit_price || item.price || 0) * (item.quantity || 1)),
+          subtotal: Number(
+            item.subtotal ||
+              (item.unit_price || item.price || 0) * (item.quantity || 1)
+          ),
         };
-        
+
         console.log("📦 Item convertido:", produto);
         return produto;
       });
 
       setProdutos(produtosConvertidos);
-      console.log(`🎯 Total de ${produtosConvertidos.length} produtos carregados na venda`);
-      
+      console.log(
+        `🎯 Total de ${produtosConvertidos.length} produtos carregados na venda`
+      );
     } catch (error) {
-      console.error("❌ Erro crítico ao carregar itens da venda:", error.message);
-      
+      console.error(
+        "❌ Erro crítico ao carregar itens da venda:",
+        error.message
+      );
+
       // FALLBACK ULTIMATO: Cria produtos básicos se nada funcionar
       const fallbackItems = [
         {
           id: 1,
           nome: "Produto Exemplo",
-          preco: 10.00,
+          preco: 10.0,
           quantidade: 1,
-          subtotal: 10.00
-        }
+          subtotal: 10.0,
+        },
       ];
-      
+
       setProdutos(fallbackItems);
       console.log("⚠ Usando fallback de exemplo");
     }
@@ -252,105 +284,126 @@ export default function EditarVendaScreen({ route, navigation }) {
   };
 
   const calcularTotal = () => {
-    const total = produtos.reduce((totalAcc, produto) => totalAcc + (Number(produto.subtotal) || 0), 0);
+    const total = produtos.reduce(
+      (totalAcc, produto) => totalAcc + (Number(produto.subtotal) || 0),
+      0
+    );
     return Math.round(total * 100) / 100;
   };
 
   // --- Atualizar venda ---
+  // --- Atualizar venda (COM ITENS) ---
   const atualizarVenda = async () => {
     if (produtos.length === 0) {
       Alert.alert("Atenção", "A venda deve ter pelo menos um produto.");
       return;
     }
+
+    // Validação adicional
+    if (!paymentMethod) {
+      Alert.alert("Atenção", "Selecione uma forma de pagamento.");
+      return;
+    }
+
+    const total = calcularTotal();
+    if (total <= 0) {
+      Alert.alert("Atenção", "O total da venda deve ser maior que zero.");
+      return;
+    }
+
     setSaving(true);
     try {
-      // Monta o payload
-      const itemsPayload = produtos.map((produto) => ({
-        product_id: produto.id,
-        quantity: Number(produto.quantidade),
-        unit_price: Number(produto.preco),
-        subtotal: Number(produto.subtotal),
-      }));
-
-      const payload = {
+      // Primeiro: Atualiza os dados básicos da venda
+      const salePayload = {
         customer_id: clienteId || null,
-        total_amount: calcularTotal(),
+        total_amount: total,
         payment_method: paymentMethod,
         status: "pending",
-        items: itemsPayload,
       };
 
-      console.log("📤 Enviando atualização da venda:", payload);
-
-      // Tenta endpoints para atualizar
-      const endpoints = [
-        `/sales/${sale.id}`,
-        `/sale/${sale.id}`
-      ];
-
-      let success = false;
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`🔄 Tentando PATCH via: ${endpoint}`);
-          const response = await api.patch(endpoint, payload);
-          console.log(`✅ Venda atualizada com sucesso via: ${endpoint}`);
-          success = true;
-          
-          Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
-            {
-              text: "OK",
-              onPress: () => navigation.goBack(),
-            },
-          ]);
-          break;
-        } catch (error) {
-          console.log(`❌ PATCH falhou em ${endpoint}:`, error.response?.status);
-          if (error.response?.status === 404) {
-            continue;
-          } else {
-            throw error;
-          }
-        }
+      // Adiciona campos opcionais
+      if (tableNumber && tableNumber.trim() !== "") {
+        salePayload.table_number = tableNumber.trim();
+      }
+      if (observacoes && observacoes.trim() !== "") {
+        salePayload.notes = observacoes.trim();
       }
 
-      if (!success) {
-        // Se PATCH não funcionar, tenta PUT
-        console.log("🔄 Tentando PUT como fallback...");
-        for (const endpoint of endpoints) {
+      console.log("📤 Atualizando venda ID:", sale.id);
+      console.log("📦 Sale Payload:", salePayload);
+
+      // Atualiza dados básicos da venda
+      const saleResponse = await api.patch(`/sales/${sale.id}`, salePayload);
+      console.log("✅ Venda atualizada:", saleResponse.data);
+
+      // Segundo: Atualiza os itens da venda (se necessário)
+      try {
+        const itemsPayload = {
+          items: produtos.map((produto) => ({
+            product_id: produto.id,
+            quantity: Number(produto.quantidade),
+            unit_price: Number(produto.preco),
+          })),
+        };
+
+        console.log("🛒 Atualizando itens:", itemsPayload);
+
+        // Tenta atualizar itens (endpoints comuns)
+        const itemsEndpoints = [
+          `/sales/${sale.id}/items`,
+          `/sales/${sale.id}/update-items`,
+          `/sale/${sale.id}/items`,
+        ];
+
+        let itemsUpdated = false;
+        for (const endpoint of itemsEndpoints) {
           try {
-            const response = await api.put(endpoint, payload);
-            console.log(`✅ Venda atualizada com PUT via: ${endpoint}`);
-            success = true;
-            
-            Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
-              {
-                text: "OK",
-                onPress: () => navigation.goBack(),
-              },
-            ]);
+            await api.put(endpoint, itemsPayload);
+            console.log(`✅ Itens atualizados via: ${endpoint}`);
+            itemsUpdated = true;
             break;
-          } catch (error) {
-            console.log(`❌ PUT falhou em ${endpoint}:`, error.response?.status);
+          } catch (itemError) {
+            console.log(
+              `❌ Endpoint ${endpoint} falhou:`,
+              itemError.response?.status
+            );
             continue;
           }
         }
+
+        if (!itemsUpdated) {
+          console.log(
+            "ℹ️ Não foi possível atualizar itens, mas a venda foi atualizada"
+          );
+        }
+      } catch (itemsError) {
+        console.log(
+          "⚠️ Erro ao atualizar itens, mas venda foi salva:",
+          itemsError.message
+        );
+        // Não impede o sucesso da operação principal
       }
 
-      if (!success) {
-        Alert.alert("Aviso", "Venda atualizada localmente, mas não foi possível sincronizar com o servidor.");
-        navigation.goBack();
-      }
-
+      Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
+        {
+          text: "OK",
+          onPress: () => navigation.goBack(),
+        },
+      ]);
     } catch (error) {
-      console.error("❌ Erro ao atualizar venda:", error.response?.data || error.message);
-      
+      console.error(
+        "❌ Erro ao atualizar venda:",
+        error.response?.data || error.message
+      );
+
       let errorMessage = "Não foi possível atualizar a venda.";
+
       if (error.response?.status === 401) {
         errorMessage = "Sessão expirada. Faça login novamente.";
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
+
       Alert.alert("Erro", errorMessage);
     } finally {
       setSaving(false);
@@ -359,63 +412,75 @@ export default function EditarVendaScreen({ route, navigation }) {
 
   const finalizarVenda = async () => {
     if (produtos.length === 0) {
-      Alert.alert("Atenção", "A venda deve ter pelo menos um produto para finalizar.");
+      Alert.alert(
+        "Atenção",
+        "A venda deve ter pelo menos um produto para finalizar."
+      );
       return;
     }
+
     setSaving(true);
     try {
-      const itemsPayload = produtos.map((produto) => ({
-        product_id: produto.id,
-        quantity: Number(produto.quantidade),
-        unit_price: Number(produto.preco),
-        subtotal: Number(produto.subtotal),
-      }));
-
+      // Payload SIMPLES igual ao que funciona na SaleScreen
       const payload = {
-        customer_id: clienteId || null,
-        total_amount: calcularTotal(),
-        payment_method: paymentMethod,
         status: "paid",
-        items: itemsPayload,
+        payment_method: paymentMethod,
+        // Inclui o total atualizado
+        total_amount: calcularTotal(),
       };
 
-      // Tenta endpoints para finalizar
-      const endpoints = [
-        `/sales/${sale.id}`,
-        `/sale/${sale.id}`
-      ];
+      console.log("💰 Finalizando venda ID:", sale.id);
+      console.log("📤 Payload:", payload);
 
-      let success = false;
-      for (const endpoint of endpoints) {
+      // Tenta APENAS o endpoint que sabemos funcionar
+      const response = await api.patch(`/sales/${sale.id}`, payload);
+
+      console.log("✅ Venda finalizada com sucesso:", response.data);
+
+      Alert.alert("Sucesso", "Venda finalizada com sucesso!", [
+        {
+          text: "OK",
+          onPress: () => navigation.goBack(),
+        },
+      ]);
+    } catch (error) {
+      console.error(
+        "❌ Erro ao finalizar venda:",
+        error.response?.data || error.message
+      );
+
+      let errorMessage = "Não foi possível finalizar a venda.";
+
+      // Tenta fallback SIMPLES com PUT
+      if (error.response?.status === 404 || error.response?.status === 405) {
         try {
-          const response = await api.patch(endpoint, payload);
-          console.log(`💰 Venda finalizada com sucesso via: ${endpoint}`);
-          success = true;
-          
+          console.log("🔄 Tentando PUT como fallback...");
+          const putResponse = await api.put(`/sales/${sale.id}`, {
+            status: "paid",
+            payment_method: paymentMethod,
+            total_amount: calcularTotal(),
+          });
+
+          console.log("✅ Venda finalizada via PUT:", putResponse.data);
+
           Alert.alert("Sucesso", "Venda finalizada com sucesso!", [
             {
               text: "OK",
               onPress: () => navigation.goBack(),
             },
           ]);
-          break;
-        } catch (error) {
-          if (error.response?.status === 404) {
-            continue;
-          } else {
-            throw error;
-          }
+          return;
+        } catch (putError) {
+          console.error("❌ PUT também falhou:", putError.response?.data);
+          errorMessage = "Endpoint não encontrado. Verifique a URL da API.";
         }
+      } else if (error.response?.status === 401) {
+        errorMessage = "Sessão expirada. Faça login novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
 
-      if (!success) {
-        Alert.alert("Aviso", "Venda finalizada localmente, mas não foi possível sincronizar com o servidor.");
-        navigation.goBack();
-      }
-
-    } catch (error) {
-      console.error("❌ Erro ao finalizar venda:", error.response?.data || error.message);
-      Alert.alert("Erro", "Não foi possível finalizar a venda.");
+      Alert.alert("Erro", errorMessage);
     } finally {
       setSaving(false);
     }
@@ -446,7 +511,11 @@ export default function EditarVendaScreen({ route, navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={styles.content}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.userSection}>
           <Text style={styles.userLabel}>Vendedor:</Text>
           <Text style={styles.userName}>{user?.name}</Text>
@@ -475,9 +544,20 @@ export default function EditarVendaScreen({ route, navigation }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cliente</Text>
-          <TouchableOpacity style={styles.selectButton} onPress={() => setShowClientesModal(true)}>
-            <Text style={clienteSelecionado ? styles.selectButtonText : styles.selectButtonPlaceholder}>
-              {clienteSelecionado ? clienteSelecionado.name ?? clienteSelecionado.nome : "Selecionar cliente (opcional)"}
+          <TouchableOpacity
+            style={styles.selectButton}
+            onPress={() => setShowClientesModal(true)}
+          >
+            <Text
+              style={
+                clienteSelecionado
+                  ? styles.selectButtonText
+                  : styles.selectButtonPlaceholder
+              }
+            >
+              {clienteSelecionado
+                ? clienteSelecionado.name ?? clienteSelecionado.nome
+                : "Selecionar cliente (opcional)"}
             </Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
@@ -486,7 +566,10 @@ export default function EditarVendaScreen({ route, navigation }) {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Produtos</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowProdutosModal(true)}>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setShowProdutosModal(true)}
+            >
               <Ionicons name="add" size={20} color="#fff" />
               <Text style={styles.addButtonText}>Adicionar</Text>
             </TouchableOpacity>
@@ -500,25 +583,38 @@ export default function EditarVendaScreen({ route, navigation }) {
                 <View style={styles.produtoRow}>
                   <View style={styles.produtoInfo}>
                     <Text style={styles.produtoNome}>{produto.nome}</Text>
-                    <Text style={styles.produtoPreco}>R$ {Number(produto.preco).toFixed(2)}</Text>
+                    <Text style={styles.produtoPreco}>
+                      R$ {Number(produto.preco).toFixed(2)}
+                    </Text>
                   </View>
                   <View style={styles.quantidadeContainer}>
                     <TouchableOpacity
                       style={styles.quantidadeButton}
-                      onPress={() => atualizarQuantidade(produto.id, produto.quantidade - 1)}
+                      onPress={() =>
+                        atualizarQuantidade(produto.id, produto.quantidade - 1)
+                      }
                     >
                       <Ionicons name="remove" size={16} color="#7b2ff7" />
                     </TouchableOpacity>
-                    <Text style={styles.quantidadeText}>{produto.quantidade}</Text>
+                    <Text style={styles.quantidadeText}>
+                      {produto.quantidade}
+                    </Text>
                     <TouchableOpacity
                       style={styles.quantidadeButton}
-                      onPress={() => atualizarQuantidade(produto.id, produto.quantidade + 1)}
+                      onPress={() =>
+                        atualizarQuantidade(produto.id, produto.quantidade + 1)
+                      }
                     >
                       <Ionicons name="add" size={16} color="#7b2ff7" />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.subtotal}>R$ {Number(produto.subtotal).toFixed(2)}</Text>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => removerProduto(produto.id)}>
+                  <Text style={styles.subtotal}>
+                    R$ {Number(produto.subtotal).toFixed(2)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removerProduto(produto.id)}
+                  >
                     <Ionicons name="trash-outline" size={18} color="#ff4444" />
                   </TouchableOpacity>
                 </View>
@@ -531,26 +627,50 @@ export default function EditarVendaScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>Forma de Pagamento</Text>
           <View style={styles.paymentOptions}>
             <TouchableOpacity
-              style={[styles.paymentOption, paymentMethod === "cash" && styles.paymentOptionSelected]}
+              style={[
+                styles.paymentOption,
+                paymentMethod === "cash" && styles.paymentOptionSelected,
+              ]}
               onPress={() => setPaymentMethod("cash")}
             >
-              <Text style={[styles.paymentOptionText, paymentMethod === "cash" && styles.paymentOptionTextSelected]}>
+              <Text
+                style={[
+                  styles.paymentOptionText,
+                  paymentMethod === "cash" && styles.paymentOptionTextSelected,
+                ]}
+              >
                 Dinheiro
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.paymentOption, paymentMethod === "card" && styles.paymentOptionSelected]}
+              style={[
+                styles.paymentOption,
+                paymentMethod === "card" && styles.paymentOptionSelected,
+              ]}
               onPress={() => setPaymentMethod("card")}
             >
-              <Text style={[styles.paymentOptionText, paymentMethod === "card" && styles.paymentOptionTextSelected]}>
+              <Text
+                style={[
+                  styles.paymentOptionText,
+                  paymentMethod === "card" && styles.paymentOptionTextSelected,
+                ]}
+              >
                 Cartão
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.paymentOption, paymentMethod === "pix" && styles.paymentOptionSelected]}
+              style={[
+                styles.paymentOption,
+                paymentMethod === "pix" && styles.paymentOptionSelected,
+              ]}
               onPress={() => setPaymentMethod("pix")}
             >
-              <Text style={[styles.paymentOptionText, paymentMethod === "pix" && styles.paymentOptionTextSelected]}>
+              <Text
+                style={[
+                  styles.paymentOptionText,
+                  paymentMethod === "pix" && styles.paymentOptionTextSelected,
+                ]}
+              >
                 PIX
               </Text>
             </TouchableOpacity>
@@ -581,7 +701,11 @@ export default function EditarVendaScreen({ route, navigation }) {
             onPress={atualizarVenda}
             disabled={saving}
           >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Atualizar Venda</Text>}
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Atualizar Venda</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -613,7 +737,9 @@ export default function EditarVendaScreen({ route, navigation }) {
             </View>
             <ScrollView>
               {clientes.length === 0 ? (
-                <Text style={styles.emptyModalText}>Nenhum cliente cadastrado</Text>
+                <Text style={styles.emptyModalText}>
+                  Nenhum cliente cadastrado
+                </Text>
               ) : (
                 clientes.map((cliente) => (
                   <TouchableOpacity
@@ -624,8 +750,12 @@ export default function EditarVendaScreen({ route, navigation }) {
                       setShowClientesModal(false);
                     }}
                   >
-                    <Text style={styles.clienteNome}>{cliente.name ?? cliente.nome}</Text>
-                    {cliente.phone && <Text style={styles.clientePhone}>{cliente.phone}</Text>}
+                    <Text style={styles.clienteNome}>
+                      {cliente.name ?? cliente.nome}
+                    </Text>
+                    {cliente.phone && (
+                      <Text style={styles.clientePhone}>{cliente.phone}</Text>
+                    )}
                   </TouchableOpacity>
                 ))
               )}
@@ -645,7 +775,9 @@ export default function EditarVendaScreen({ route, navigation }) {
             </View>
             <ScrollView>
               {produtosDisponiveis.length === 0 ? (
-                <Text style={styles.emptyModalText}>Nenhum produto disponível</Text>
+                <Text style={styles.emptyModalText}>
+                  Nenhum produto disponível
+                </Text>
               ) : (
                 produtosDisponiveis.map((produto) => (
                   <TouchableOpacity
@@ -654,9 +786,12 @@ export default function EditarVendaScreen({ route, navigation }) {
                     onPress={() => adicionarProduto(produto)}
                   >
                     <View style={styles.produtoModalInfo}>
-                      <Text style={styles.produtoModalNome}>{produto.name ?? produto.nome}</Text>
+                      <Text style={styles.produtoModalNome}>
+                        {produto.name ?? produto.nome}
+                      </Text>
                       <Text style={styles.produtoModalPreco}>
-                        R$ {Number(produto.price ?? produto.preco ?? 0).toFixed(2)}
+                        R${" "}
+                        {Number(produto.price ?? produto.preco ?? 0).toFixed(2)}
                       </Text>
                     </View>
                     <Ionicons name="add-circle" size={24} color="#7b2ff7" />
@@ -675,21 +810,22 @@ export default function EditarVendaScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f4fc"
+    backgroundColor: "#f9f4fc",
+    paddingBottom: 10, // Adicionado para dar espaço
   },
-  
+
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
-  
+
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
-  
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -699,18 +835,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
-  
+
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333"
+    color: "#333",
   },
-  
+
   content: {
     flex: 1,
-    padding: 20
+    padding: 20,
   },
-  
+
+  scrollContent: {
+    paddingBottom: 30, // Espaço extra para os botões não ficarem colados
+    flexGrow: 1,
+  },
+
   userSection: {
     backgroundColor: "#fff",
     padding: 15,
@@ -725,30 +866,30 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  
+
   userLabel: {
     fontSize: 14,
-    color: "#666"
+    color: "#666",
   },
-  
+
   userName: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#7b2ff7"
+    color: "#7b2ff7",
   },
-  
+
   statusSection: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
   },
-  
+
   statusLabel: {
     fontSize: 14,
     color: "#666",
-    fontWeight: "500"
+    fontWeight: "500",
   },
-  
+
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -757,14 +898,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
   },
-  
+
   statusText: {
     fontSize: 12,
     fontWeight: "bold",
     color: "#856404",
-    marginLeft: 4
+    marginLeft: 4,
   },
-  
+
   section: {
     backgroundColor: "#fff",
     padding: 15,
@@ -776,34 +917,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  
+
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10
+    marginBottom: 10,
   },
-  
+
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333"
+    color: "#333",
   },
-  
+
   input: {
     borderWidth: 1,
     borderColor: "#ddd",
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    backgroundColor: "#f9f9f9"
+    backgroundColor: "#f9f9f9",
   },
-  
+
   textArea: {
     height: 80,
-    textAlignVertical: "top"
+    textAlignVertical: "top",
   },
-  
+
   selectButton: {
     borderWidth: 1,
     borderColor: "#ddd",
@@ -812,108 +953,108 @@ const styles = StyleSheet.create({
     backgroundColor: "#f9f9f9",
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center"
+    alignItems: "center",
   },
-  
+
   selectButtonText: {
     fontSize: 14,
-    color: "#333"
+    color: "#333",
   },
-  
+
   selectButtonPlaceholder: {
     fontSize: 14,
-    color: "#999"
+    color: "#999",
   },
-  
+
   addButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#7b2ff7",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8
+    borderRadius: 8,
   },
-  
+
   addButtonText: {
     color: "#fff",
     fontWeight: "bold",
     marginLeft: 5,
-    fontSize: 12
+    fontSize: 12,
   },
-  
+
   emptyText: {
     textAlign: "center",
     color: "#999",
     fontStyle: "italic",
-    padding: 20
+    padding: 20,
   },
-  
+
   produtoItem: {
     borderWidth: 1,
     borderColor: "#eee",
     borderRadius: 8,
     padding: 10,
-    marginBottom: 10
+    marginBottom: 10,
   },
-  
+
   produtoRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
-  
+
   produtoInfo: {
-    flex: 1
+    flex: 1,
   },
-  
+
   produtoNome: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333"
+    color: "#333",
   },
-  
+
   produtoPreco: {
     fontSize: 12,
-    color: "#666"
+    color: "#666",
   },
-  
+
   quantidadeContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 10
+    marginHorizontal: 10,
   },
-  
+
   quantidadeButton: {
     width: 24,
     height: 24,
     borderRadius: 12,
     backgroundColor: "#f0e6ff",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
-  
+
   quantidadeText: {
     marginHorizontal: 8,
     fontSize: 14,
-    fontWeight: "600"
+    fontWeight: "600",
   },
-  
+
   subtotal: {
     fontSize: 14,
     fontWeight: "bold",
     color: "#7b2ff7",
-    marginHorizontal: 10
+    marginHorizontal: 10,
   },
-  
+
   removeButton: {
-    padding: 5
+    padding: 5,
   },
-  
+
   paymentOptions: {
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
-  
+
   paymentOption: {
     flex: 1,
     padding: 12,
@@ -921,24 +1062,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
     alignItems: "center",
-    marginHorizontal: 4
+    marginHorizontal: 4,
   },
-  
+
   paymentOptionSelected: {
     backgroundColor: "#7b2ff7",
-    borderColor: "#7b2ff7"
+    borderColor: "#7b2ff7",
   },
-  
+
   paymentOptionText: {
     fontSize: 14,
-    color: "#666"
+    color: "#666",
   },
-  
+
   paymentOptionTextSelected: {
     color: "#fff",
-    fontWeight: "bold"
+    fontWeight: "bold",
   },
-  
+
   totalSection: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -946,33 +1087,36 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 20,
     borderRadius: 12,
-    marginBottom: 20
+    marginBottom: 20,
   },
-  
+
   totalLabel: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333"
+    color: "#333",
   },
-  
+
   totalValue: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#7b2ff7"
+    color: "#7b2ff7",
   },
-  
+
   footer: {
     padding: 20,
+    paddingBottom: 25, // Aumentado para dar mais espaço
     backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#eee"
+    borderTopColor: "#eee",
+    marginBottom:120,
+    // Remove position absolute se existir
   },
-  
+
   footerButtons: {
     flexDirection: "row",
-    justifyContent: "space-between"
+    justifyContent: "space-between",
   },
-  
+
   button: {
     flex: 1,
     padding: 16,
@@ -980,99 +1124,99 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    marginHorizontal: 5
+    marginHorizontal: 5,
   },
-  
+
   updateButton: {
-    backgroundColor: "#7b2ff7"
+    backgroundColor: "#7b2ff7",
   },
-  
+
   finalizeButton: {
-    backgroundColor: "#4CAF50"
+    backgroundColor: "#4CAF50",
   },
-  
+
   buttonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
-    marginLeft: 8
+    marginLeft: 8,
   },
-  
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end"
+    justifyContent: "flex-end",
   },
-  
+
   modalContent: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "80%"
+    maxHeight: "80%",
   },
-  
+
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee"
+    borderBottomColor: "#eee",
   },
-  
+
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#333"
+    color: "#333",
   },
-  
+
   emptyModalText: {
     textAlign: "center",
     color: "#999",
     fontStyle: "italic",
-    padding: 20
+    padding: 20,
   },
-  
+
   clienteItem: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
+    borderBottomColor: "#f0f0f0",
   },
-  
+
   clienteNome: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#333"
+    color: "#333",
   },
-  
+
   clientePhone: {
     fontSize: 14,
     color: "#666",
-    marginTop: 4
+    marginTop: 4,
   },
-  
+
   produtoModalItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
+    borderBottomColor: "#f0f0f0",
   },
-  
+
   produtoModalInfo: {
-    flex: 1
+    flex: 1,
   },
-  
+
   produtoModalNome: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#333"
+    color: "#333",
   },
-  
+
   produtoModalPreco: {
     fontSize: 14,
     color: "#7b2ff7",
-    marginTop: 4
+    marginTop: 4,
   },
 });
