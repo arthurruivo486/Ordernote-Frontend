@@ -1,16 +1,16 @@
-
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert } from 'react-native';
+import { 
+  View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, 
+  Modal, FlatList, StyleSheet, KeyboardAvoidingView, Platform 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import api from '../../services/api';
 
-// Não inserir produtos estáticos aqui — estes dados vêm do banco/API.
-// Configure `API_BASE_URL` para apontar para seu backend (ex.: 'http://localhost:3333').
-const API_BASE_URL = process.env.API_BASE_URL || 'https://h8gt5rj4-3000.brs.devtunnels.ms/api';
 const ENDPOINTS = {
-  PRODUCT_GROUPS: `${API_BASE_URL}/product_groups`,
-  PRODUCTS: `${API_BASE_URL}/products`,
+  PRODUCT_GROUPS: '/product_groups',
+  PRODUCTS: '/products',
 };
 
 export default function ProductScreen({ navigation }) {
@@ -22,57 +22,214 @@ export default function ProductScreen({ navigation }) {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupIcon, setNewGroupIcon] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  
+  // Estados para o modal de produto
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productForm, setProductForm] = useState({
+    name: '',
+    description: '',
+    price: '',
+    stock: '',
+    group_id: '',
+    image_url: ''
+  });
+  const [creatingProduct, setCreatingProduct] = useState(false);
 
   async function fetchProductGroups() {
     try {
-      const res = await fetch(ENDPOINTS.PRODUCT_GROUPS);
-      if (!res.ok) throw new Error(`Groups fetch failed: ${res.status}`);
-      const data = await res.json();
-      setProductGroups(Array.isArray(data) ? data : []);
+      console.log('🔄 Buscando grupos de produtos...');
+      const res = await api.get(ENDPOINTS.PRODUCT_GROUPS);
+      const data = res.data;
+      
+      if (Array.isArray(data)) {
+        console.log(`✅ ${data.length} grupos carregados da API`);
+        setProductGroups(data);
+      } else if (data && typeof data === 'object') {
+        const possibleArrays = ['data', 'product_groups', 'groups', 'items', 'results'];
+        let foundArray = null;
+        
+        for (const key of possibleArrays) {
+          if (Array.isArray(data[key])) {
+            foundArray = data[key];
+            console.log(`✅ Array encontrado na chave "${key}": ${foundArray.length} grupos`);
+            break;
+          }
+        }
+        
+        if (foundArray) {
+          setProductGroups(foundArray);
+        } else {
+          const groupsArray = Object.values(data).filter(item => 
+            item && typeof item === 'object' && (item.name || item.id)
+          );
+          setProductGroups(groupsArray);
+        }
+      } else {
+        setProductGroups([]);
+      }
     } catch (err) {
-      console.warn('fetchProductGroups error', err.message);
+      console.warn('❌ Erro ao buscar grupos:', err);
+      Alert.alert('Erro', 'Não foi possível carregar as categorias');
       setProductGroups([]);
     }
   }
 
   async function fetchProducts() {
     try {
-      const res = await fetch(ENDPOINTS.PRODUCTS);
-      if (!res.ok) throw new Error(`Products fetch failed: ${res.status}`);
-      const data = await res.json();
+      const res = await api.get(ENDPOINTS.PRODUCTS);
+      const data = res.data;
       const list = Array.isArray(data) ? data : [];
       setProducts(list);
-      // por padrão mostrar apenas ativos
       setFilteredProducts(list.filter(p => p.is_active !== false));
     } catch (err) {
-      console.warn('fetchProducts error', err.message);
+      console.warn('Erro ao buscar produtos:', err);
       setProducts([]);
       setFilteredProducts([]);
     }
   }
 
   useEffect(() => {
-    // Carrega grupos e produtos do backend ao montar o componente
     fetchProductGroups();
     fetchProducts();
   }, []);
 
-  function filterAndSet({ groupId = selectedGroupId, query = searchQuery } = {}) {
-    let base = products.filter(p => p.is_active !== false);
-    if (groupId) base = base.filter(p => p.group_id === groupId);
-    if (query) base = base.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
-    setFilteredProducts(base);
-  }
-
   function handleSelectGroup(groupId) {
-    const newId = groupId === selectedGroupId ? null : groupId;
-    setSelectedGroupId(newId);
-    filterAndSet({ groupId: newId, query: searchQuery });
+    const group = productGroups.find(g => g.id === groupId);
+    if (group) {
+      setSelectedCategory(group);
+      setShowCategoryModal(true);
+    }
   }
 
   function handleSearch(text) {
     setSearchQuery(text);
-    filterAndSet({ groupId: selectedGroupId, query: text });
+    let filtered = products.filter(p => p.is_active !== false);
+    if (text) {
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(text.toLowerCase())
+      );
+    }
+    setFilteredProducts(filtered);
+  }
+
+  function handleCloseCategoryModal() {
+    setShowCategoryModal(false);
+    setSelectedCategory(null);
+  }
+
+  function getProductsByCategory(categoryId) {
+    return products.filter(p => p.group_id === categoryId && p.is_active !== false);
+  }
+
+  // Funções para gerenciar produtos
+  function openAddProductModal(categoryId = null) {
+    setProductForm({
+      name: '',
+      description: '',
+      price: '',
+      stock: '',
+      group_id: categoryId || '',
+      image_url: ''
+    });
+    setEditingProduct(null);
+    setShowProductModal(true);
+  }
+
+  function openEditProductModal(product) {
+    setProductForm({
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price?.toString() || '',
+      stock: product.stock?.toString() || '',
+      group_id: product.group_id || '',
+      image_url: product.image_url || ''
+    });
+    setEditingProduct(product);
+    setShowProductModal(true);
+  }
+
+  function closeProductModal() {
+    setShowProductModal(false);
+    setEditingProduct(null);
+    setProductForm({
+      name: '',
+      description: '',
+      price: '',
+      stock: '',
+      group_id: '',
+      image_url: ''
+    });
+  }
+
+  async function handleSaveProduct() {
+    if (!productForm.name.trim()) {
+      Alert.alert('Validação', 'Nome do produto é obrigatório');
+      return;
+    }
+
+    if (!productForm.price || isNaN(parseFloat(productForm.price))) {
+      Alert.alert('Validação', 'Preço é obrigatório e deve ser um número');
+      return;
+    }
+
+    setCreatingProduct(true);
+    try {
+      const productData = {
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        price: parseFloat(productForm.price),
+        stock: parseInt(productForm.stock) || 0,
+        group_id: productForm.group_id ? parseInt(productForm.group_id) : null,
+        image_url: productForm.image_url.trim() || null,
+        is_active: true
+      };
+
+      if (editingProduct) {
+        // Editar produto existente
+        await api.put(`${ENDPOINTS.PRODUCTS}/${editingProduct.id}`, productData);
+        Alert.alert('Sucesso', 'Produto atualizado com sucesso');
+      } else {
+        // Criar novo produto
+        await api.post(ENDPOINTS.PRODUCTS, productData);
+        Alert.alert('Sucesso', 'Produto criado com sucesso');
+      }
+
+      // Recarrega os produtos
+      await fetchProducts();
+      closeProductModal();
+    } catch (err) {
+      console.warn('Erro ao salvar produto:', err);
+      Alert.alert('Erro', 'Não foi possível salvar o produto');
+    } finally {
+      setCreatingProduct(false);
+    }
+  }
+
+  async function handleDeleteProduct(product) {
+    Alert.alert(
+      'Confirmar exclusão',
+      `Tem certeza que deseja excluir "${product.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`${ENDPOINTS.PRODUCTS}/${product.id}`);
+              Alert.alert('Sucesso', 'Produto excluído com sucesso');
+              await fetchProducts();
+            } catch (err) {
+              console.warn('Erro ao excluir produto:', err);
+              Alert.alert('Erro', 'Não foi possível excluir o produto');
+            }
+          }
+        }
+      ]
+    );
   }
 
   async function createGroup() {
@@ -80,47 +237,269 @@ export default function ProductScreen({ navigation }) {
       Alert.alert('Validação', 'Nome da categoria é obrigatório');
       return;
     }
+
     setCreatingGroup(true);
     try {
-      const res = await fetch(ENDPOINTS.PRODUCT_GROUPS, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newGroupName.trim(), icon: newGroupIcon.trim() || null }),
+      await api.post(ENDPOINTS.PRODUCT_GROUPS, {
+        name: newGroupName.trim(),
+        icon: newGroupIcon.trim() || null,
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`${res.status} ${text}`);
-      }
-
-      // Tenta ler o objeto criado (alguns backends retornam o recurso criado)
-      let created = null;
-      try {
-        created = await res.json();
-      } catch (e) {
-        created = null;
-      }
-
+      
+      await fetchProductGroups();
       setNewGroupName('');
       setNewGroupIcon('');
-
-      // Se o backend retornou o grupo criado com id, atualiza otimisticamente
-      if (created && created.id) {
-        setProductGroups(prev => [created, ...prev]);
-      } else {
-        // caso não tenha retornado, recarrega a lista do servidor
-        await fetchProductGroups();
-      }
-
       Alert.alert('Sucesso', 'Categoria criada com sucesso');
     } catch (err) {
-      console.warn('createGroup error', err.message);
+      console.warn('Erro ao criar categoria:', err);
       Alert.alert('Erro', 'Não foi possível criar a categoria');
     } finally {
       setCreatingGroup(false);
     }
   }
+
+  // Componente para a modal de produtos por categoria
+  const CategoryProductsModal = () => {
+    const categoryProducts = selectedCategory ? getProductsByCategory(selectedCategory.id) : [];
+    
+    return (
+      <Modal
+        visible={showCategoryModal}
+        animationType="slide"
+        onRequestClose={handleCloseCategoryModal}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <LinearGradient
+            colors={["#872bb8", "#311aa4"]}
+            style={styles.modalHeader}
+          >
+            <View style={styles.modalHeaderContent}>
+              <TouchableOpacity 
+                onPress={handleCloseCategoryModal}
+                style={styles.backButton}
+              >
+                <Ionicons name="chevron-back" size={26} color="#fff" />
+              </TouchableOpacity>
+              <View style={styles.modalTitleContainer}>
+                <Text style={styles.modalCategoryEmoji}>
+                  {selectedCategory?.icon || selectedCategory?.emoji || '📁'}
+                </Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {selectedCategory?.name || 'Categoria'}
+                </Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => openAddProductModal(selectedCategory?.id)}
+                style={styles.addButton}
+              >
+                <Ionicons name="add" size={26} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          <View style={styles.modalContent}>
+            <Text style={styles.productsCount}>
+              {categoryProducts.length} produto{categoryProducts.length !== 1 ? 's' : ''} nesta categoria
+            </Text>
+            
+            {categoryProducts.length > 0 ? (
+              <FlatList
+                data={categoryProducts}
+                keyExtractor={(item) => item.id.toString()}
+                contentContainerStyle={styles.productsList}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <TouchableOpacity 
+                    style={styles.productListItem}
+                    onPress={() => openEditProductModal(item)}
+                    onLongPress={() => handleDeleteProduct(item)}
+                  >
+                    {item.image_url ? (
+                      <Image 
+                        source={{ uri: item.image_url }} 
+                        style={styles.productListImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.productListImagePlaceholder}>
+                        <Ionicons name="image-outline" size={24} color="#ccc" />
+                      </View>
+                    )}
+                    <View style={styles.productListInfo}>
+                      <Text style={styles.productListName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.productListPrice}>
+                        {formatBRL(item.price)}
+                      </Text>
+                      {item.description ? (
+                        <Text style={styles.productListDescription} numberOfLines={1}>
+                          {item.description}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.productListStock}>
+                        Estoque: {item.stock || 0}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+              <View style={styles.emptyState}>
+                <Ionicons name="file-tray-outline" size={64} color="#ccc" />
+                <Text style={styles.emptyStateText}>
+                  Nenhum produto nesta categoria
+                </Text>
+                <TouchableOpacity 
+                  style={styles.addFirstProductButton}
+                  onPress={() => openAddProductModal(selectedCategory?.id)}
+                >
+                  <Text style={styles.addFirstProductButtonText}>
+                    Adicionar primeiro produto
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
+    );
+  };
+
+  // Modal para adicionar/editar produto
+  const ProductFormModal = () => (
+    <Modal
+      visible={showProductModal}
+      animationType="slide"
+      onRequestClose={closeProductModal}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalContainer}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <LinearGradient
+            colors={["#872bb8", "#311aa4"]}
+            style={styles.modalHeader}
+          >
+            <View style={styles.modalHeaderContent}>
+              <TouchableOpacity 
+                onPress={closeProductModal}
+                style={styles.backButton}
+              >
+                <Ionicons name="chevron-back" size={26} color="#fff" />
+              </TouchableOpacity>
+              <View style={styles.modalTitleContainer}>
+                <Text style={styles.modalTitle}>
+                  {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+                </Text>
+              </View>
+              <View style={styles.placeholder} />
+            </View>
+          </LinearGradient>
+
+          <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+            <Text style={styles.formLabel}>Nome do Produto *</Text>
+            <TextInput
+              placeholder="Digite o nome do produto"
+              value={productForm.name}
+              onChangeText={(text) => setProductForm({...productForm, name: text})}
+              style={styles.formInput}
+            />
+
+            <Text style={styles.formLabel}>Descrição</Text>
+            <TextInput
+              placeholder="Descrição do produto (opcional)"
+              value={productForm.description}
+              onChangeText={(text) => setProductForm({...productForm, description: text})}
+              style={[styles.formInput, styles.textArea]}
+              multiline
+              numberOfLines={3}
+            />
+
+            <Text style={styles.formLabel}>Preço *</Text>
+            <TextInput
+              placeholder="0.00"
+              value={productForm.price}
+              onChangeText={(text) => setProductForm({...productForm, price: text})}
+              style={styles.formInput}
+              keyboardType="decimal-pad"
+            />
+
+            <Text style={styles.formLabel}>Estoque</Text>
+            <TextInput
+              placeholder="0"
+              value={productForm.stock}
+              onChangeText={(text) => setProductForm({...productForm, stock: text})}
+              style={styles.formInput}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.formLabel}>Categoria</Text>
+            <View style={styles.categoryPicker}>
+              {productGroups.map(group => (
+                <TouchableOpacity
+                  key={group.id}
+                  style={[
+                    styles.categoryOption,
+                    productForm.group_id === group.id && styles.categoryOptionSelected
+                  ]}
+                  onPress={() => setProductForm({...productForm, group_id: group.id})}
+                >
+                  <Text style={styles.categoryOptionEmoji}>
+                    {group.icon || group.emoji || '📁'}
+                  </Text>
+                  <Text style={[
+                    styles.categoryOptionName,
+                    productForm.group_id === group.id && styles.categoryOptionNameSelected
+                  ]}>
+                    {group.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.formLabel}>URL da Imagem</Text>
+            <TextInput
+              placeholder="https://exemplo.com/imagem.jpg (opcional)"
+              value={productForm.image_url}
+              onChangeText={(text) => setProductForm({...productForm, image_url: text})}
+              style={styles.formInput}
+            />
+
+            <TouchableOpacity 
+              style={styles.saveProductButton}
+              onPress={handleSaveProduct}
+              disabled={creatingProduct}
+            >
+              <Text style={styles.saveProductButtonText}>
+                {creatingProduct ? 'Salvando...' : (editingProduct ? 'Atualizar Produto' : 'Criar Produto')}
+              </Text>
+            </TouchableOpacity>
+
+            {editingProduct && (
+              <TouchableOpacity 
+                style={styles.deleteProductButton}
+                onPress={() => handleDeleteProduct(editingProduct)}
+              >
+                <Text style={styles.deleteProductButtonText}>
+                  Excluir Produto
+                </Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  const formatBRL = (value) => {
+    const n = Number(value || 0);
+    return n.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -132,13 +511,17 @@ export default function ProductScreen({ navigation }) {
           style={styles.header}
         >
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={() => navigation.navigate('Product')}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
               <Ionicons name="chevron-back" size={26} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.title}>Produtos</Text>
+            <TouchableOpacity onPress={() => openAddProductModal()}>
+              <Ionicons name="add" size={26} color="#fff" />
+            </TouchableOpacity>
           </View>
         </LinearGradient>
 
+        {/* Formulário de criação de categoria */}
         <View style={styles.createWrapper}>
           <TextInput
             placeholder="Nome da categoria"
@@ -152,24 +535,60 @@ export default function ProductScreen({ navigation }) {
             onChangeText={setNewGroupIcon}
             style={styles.createInput}
           />
-          <TouchableOpacity style={styles.createButton} onPress={createGroup} disabled={creatingGroup}>
-            <Text style={styles.createButtonText}>{creatingGroup ? 'Criando...' : 'Criar categoria'}</Text>
+          <TouchableOpacity 
+            style={styles.createButton} 
+            onPress={createGroup} 
+            disabled={creatingGroup}
+          >
+            <Text style={styles.createButtonText}>
+              {creatingGroup ? 'Criando...' : 'Criar categoria'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.productList}>
-          {productGroups.map(g => (
-            <TouchableOpacity
-              key={g.id}
-              style={[styles.productItem, selectedGroupId === g.id && styles.groupItemActive]}
-              onPress={() => handleSelectGroup(g.id)}
-            >
-              <Text style={styles.groupEmoji}>{g.icon ? `${g.icon}` : '📁'}</Text>
-              <Text style={styles.productTitle}>{g.name}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* Lista de categorias */}
+        <View style={styles.categoriesSection}>
+          <Text style={styles.sectionTitle}>
+            Categorias ({productGroups.length})
+          </Text>
+          <View style={styles.categoriesGrid}>
+            {productGroups.map(g => {
+              const emoji = g.icon || g.emoji || g.symbol || '📁';
+              const name = g.name || g.title || g.label || 'Sem nome';
+              const productCount = products.filter(p => p.group_id === g.id && p.is_active !== false).length;
+              
+              return (
+                <TouchableOpacity
+                  key={g.id}
+                  style={styles.categoryCard}
+                  onPress={() => handleSelectGroup(g.id)}
+                >
+                  <Text style={styles.categoryEmoji}>{emoji}</Text>
+                  <Text style={styles.categoryName} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <Text style={styles.categoryCount}>
+                    {productCount} produto{productCount !== 1 ? 's' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {productGroups.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="folder-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyStateText}>
+                Nenhuma categoria encontrada
+              </Text>
+              <Text style={styles.emptyStateSubtext}>
+                Crie sua primeira categoria acima
+              </Text>
+            </View>
+          )}
         </View>
 
+        {/* Busca e lista de produtos */}
         <View style={styles.searchWrapper}>
           <TextInput
             placeholder="Buscar produto..."
@@ -179,23 +598,70 @@ export default function ProductScreen({ navigation }) {
           />
         </View>
 
-        <View style={styles.productList}>
-          {filteredProducts.map(prod => (
-            <TouchableOpacity key={prod.id} style={styles.productItem}>
-              {prod.image_url ? (
-                <Image source={{ uri: prod.image_url }} style={styles.productImage} />
-              ) : null}
-              <Text style={styles.productTitle}>{prod.name}</Text>
-              <Text style={styles.productDescription}>{prod.description}</Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.productsSection}>
+          <Text style={styles.sectionTitle}>
+            {searchQuery ? `Resultados (${filteredProducts.length})` : `Todos os Produtos (${filteredProducts.length})`}
+          </Text>
+          <View style={styles.productsGrid}>
+            {filteredProducts.map(prod => (
+              <TouchableOpacity 
+                key={prod.id} 
+                style={styles.productCard}
+                onPress={() => openEditProductModal(prod)}
+              >
+                {prod.image_url ? (
+                  <Image 
+                    source={{ uri: prod.image_url }} 
+                    style={styles.productImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.productImagePlaceholder}>
+                    <Ionicons name="image-outline" size={32} color="#ccc" />
+                  </View>
+                )}
+                <Text style={styles.productName} numberOfLines={2}>
+                  {prod.name}
+                </Text>
+                <Text style={styles.productPrice}>
+                  {formatBRL(prod.price)}
+                </Text>
+                {prod.description ? (
+                  <Text style={styles.productDescription} numberOfLines={2}>
+                    {prod.description}
+                  </Text>
+                ) : null}
+                <Text style={styles.productStock}>
+                  Estoque: {prod.stock || 0}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {filteredProducts.length === 0 && products.length > 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={48} color="#ccc" />
+              <Text style={styles.emptyStateText}>
+                Nenhum produto encontrado
+              </Text>
+              <Text style={styles.emptyStateSubtext}>
+                Tente alterar os termos da busca
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {/* Modal de produtos por categoria */}
+      <CategoryProductsModal />
+      
+      {/* Modal de formulário de produto */}
+      <ProductFormModal />
     </SafeAreaView>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc",
@@ -213,66 +679,32 @@ const styles = {
   headerTop: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 40,
   },
   title: {
-    left:"32%",
     fontSize: 22,
     fontWeight: "700",
     color: "#fff",
   },
-
-  productList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
+  placeholder: {
+    width: 26,
   },
-  productItem: {
-    backgroundColor: "#fff",
-    width: "47%",
-    padding: 20,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-
-  mainButton: {
-    backgroundColor: "#7b2ff7",
-    margin: 20,
-    padding: 20,
-    borderRadius: 15,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  mainButtonText: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
+  addButton: {
+    padding: 4,
   },
   createWrapper: {
     paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 20,
+    marginTop: 20,
   },
   createInput: {
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     marginBottom: 8,
   },
   createButton: {
@@ -285,24 +717,326 @@ const styles = {
     color: '#fff',
     fontWeight: '700',
   },
-  groupContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  categoriesSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  groupEmoji: {
+  sectionTitle: {
     fontSize: 18,
-    marginRight: 6,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
   },
-  groupName: {
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  categoryCard: {
+    backgroundColor: '#fff',
+    width: '48%',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  categoryEmoji: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  categoryName: {
     color: '#333',
     fontWeight: '600',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 4,
   },
-  groupItemActive: {
-    borderColor: '#7b2ff7',
-    borderWidth: 2,
-    shadowColor: '#7b2ff7',
+  categoryCount: {
+    color: '#666',
+    fontSize: 11,
+  },
+  searchWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  searchInput: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  productsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  productsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  productCard: {
+    backgroundColor: '#fff',
+    width: '48%',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-}
+  productImage: {
+    width: '100%',
+    height: 80,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  productName: {
+    color: '#111',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  productPrice: {
+    color: '#7b2ff7',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  productDescription: {
+    color: '#666',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  productStock: {
+    color: '#888',
+    fontSize: 10,
+  },
+  // Estilos da Modal de Categoria
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f9f4fc',
+  },
+  modalHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 20,
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 4,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  modalCategoryEmoji: {
+    fontSize: 20,
+    marginRight: 8,
+    color: '#fff',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  productsCount: {
+    color: '#666',
+    fontSize: 14,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  productsList: {
+    paddingBottom: 20,
+  },
+  productListItem: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  productListImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  productListImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  productListInfo: {
+    flex: 1,
+  },
+  productListName: {
+    color: '#111',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  productListPrice: {
+    color: '#7b2ff7',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  productListDescription: {
+    color: '#666',
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  productListStock: {
+    color: '#888',
+    fontSize: 10,
+  },
+  addFirstProductButton: {
+    backgroundColor: '#7b2ff7',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 15,
+  },
+  addFirstProductButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Estilos do Formulário de Produto
+  formContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  formLabel: {
+    color: '#333',
+    fontWeight: '600',
+    fontSize: 14,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  formInput: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    fontSize: 16,
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  categoryPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  categoryOptionSelected: {
+    backgroundColor: '#7b2ff7',
+    borderColor: '#7b2ff7',
+  },
+  categoryOptionEmoji: {
+    fontSize: 14,
+    marginRight: 4,
+  },
+  categoryOptionName: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  categoryOptionNameSelected: {
+    color: '#fff',
+  },
+  saveProductButton: {
+    backgroundColor: '#4caf50',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveProductButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  deleteProductButton: {
+    backgroundColor: '#f44336',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  deleteProductButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    marginTop: 10,
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+});
