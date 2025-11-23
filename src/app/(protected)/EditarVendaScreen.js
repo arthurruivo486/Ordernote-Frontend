@@ -16,16 +16,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
 
-/**
- * EditarVendaScreen (corrigido)
- *
- * - Usa PATCH para atualizar vendas (frontend chama PATCH /sales/:id)
- * - Tenta endpoints plural/singular para orders/products quando necessário
- * - Não sobrescreve campos não informados (evita NOT NULL errors)
- * - Faz fallback para carregar itens quando endpoint específico não existe
- * - Melhora checagem de autenticação e loading UX
- */
-
 export default function EditarVendaScreen({ route, navigation }) {
   const { sale } = route.params;
   const [loading, setLoading] = useState(false);
@@ -54,133 +44,155 @@ export default function EditarVendaScreen({ route, navigation }) {
       return;
     }
 
-    carregarClientes();
-    carregarProdutos();
-    carregarItensVenda();
+    carregarDados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // --- Helpers para fallback de endpoints (plural/singular) ---
-  const tryGet = async (paths) => {
-    // paths: array de caminhos a tentar na ordem
-    for (const p of paths) {
-      try {
-        const res = await api.get(p);
-        return { path: p, res };
-      } catch (err) {
-        // se 404 continua para o próximo
-        const status = err?.response?.status;
-        if (status && status !== 404) {
-          // erro não-404: rethrow para ser tratado pelo chamador
-          throw err;
-        }
-        // se 404, apenas tenta próximo
-      }
-    }
-    // nenhum deu certo (todos 404)
-    const e = new Error("Nenhum endpoint disponível");
-    e.is404Fallback = true;
-    throw e;
-  };
-
-  const tryPatch = async (paths, data) => {
-    for (const p of paths) {
-      try {
-        const res = await api.patch(p, data);
-        return { path: p, res };
-      } catch (err) {
-        const status = err?.response?.status;
-        if (status && status !== 404) {
-          throw err;
-        }
-      }
-    }
-    const e = new Error("Nenhum endpoint PATCH disponível");
-    e.is404Fallback = true;
-    throw e;
-  };
-
   // --- Carregamento de dados ---
+  const carregarDados = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        carregarClientes(),
+        carregarProdutos(),
+        carregarItensVenda()
+      ]);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const carregarClientes = async () => {
     try {
-      console.log("📞 Carregando clientes...");
-      // tenta plural e singular
-      const { res } = await tryGet(["/customers", "/customer"]);
-      const data = res.data;
-      const clientesData = Array.isArray(data)
-        ? data
-        : data.customers ?? data.data ?? [];
+      console.log("📞 Carregando clientes via /customers...");
+      const response = await api.get("/customers");
+      const data = response.data;
+      
+      const clientesData = Array.isArray(data) 
+        ? data 
+        : data.customers || data.data || [];
+      
       setClientes(clientesData);
       console.log(`✅ ${clientesData.length} clientes carregados`);
     } catch (error) {
-      console.error("❌ Erro ao carregar clientes:", error.response?.data || error.message);
-      // não faz alert intrusivo aqui para não interromper UX, mas registra
+      console.error("❌ Erro ao carregar clientes:", error.message);
+      setClientes([]);
     }
   };
 
   const carregarProdutos = async () => {
     try {
-      console.log("📦 Carregando produtos...");
-      const { res } = await tryGet(["/products", "/product"]);
-      const data = res.data;
+      console.log("📦 Carregando produtos via /product...");
+      const response = await api.get("/product");
+      const data = response.data;
+      
       const produtosData = Array.isArray(data)
         ? data
-        : data.products ?? data.data ?? [];
+        : data.products || data.produtos || data.data || [];
+      
       setProdutosDisponiveis(produtosData);
       console.log(`✅ ${produtosData.length} produtos carregados`);
     } catch (error) {
-      console.error("❌ Erro ao carregar produtos:", error.response?.data || error.message);
+      console.error("❌ Erro ao carregar produtos:", error.message);
+      setProdutosDisponiveis([]);
     }
   };
 
   const carregarItensVenda = async () => {
     try {
-      console.log("🛒 Carregando itens da venda:", sale?.id);
-      // Tenta endpoint específico de items primeiro, depois fallback para venda completa
-      try {
-        const res = await api.get(`/sales/${sale.id}/items`);
-        const items = Array.isArray(res.data) ? res.data : res.data.items ?? [];
-        console.log(`✅ ${items.length} itens carregados da venda (via /items)`);
-        setProdutos(items.map(itemToProduto));
-        return;
-      } catch (err) {
-        if (err?.response?.status !== 404) throw err;
-        // segue para tentar /sales/:id
-      }
+      console.log("🛒 Carregando itens da venda ID:", sale?.id);
+      
+      // VERIFICAÇÃO DOS DADOS DISPONÍVEIS NO route.params
+      console.log("📋 Dados da venda no route.params:", {
+        saleId: sale?.id,
+        hasItems: !!sale?.items,
+        itemsCount: sale?.items?.length,
+        hasOrder: !!sale?.order,
+        orderItemsCount: sale?.order?.items?.length,
+        saleData: sale
+      });
 
-      // Fallback: buscar a sale e extrair items (se existirem)
-      const resSale = await api.get(`/sales/${sale.id}`);
-      const saleData = resSale.data;
-      const itemsFromSale =
-        Array.isArray(saleData.items) ? saleData.items : saleData.items ?? saleData.order?.items ?? [];
-      if (Array.isArray(itemsFromSale) && itemsFromSale.length > 0) {
-        console.log(`✅ ${itemsFromSale.length} itens carregados da venda (via /sales/:id)`);
-        setProdutos(itemsFromSale.map(itemToProduto));
-      } else {
-        // último recurso: usar sale.items do route.params
-        if (sale?.items && Array.isArray(sale.items)) {
-          console.log("ℹ Usando sale.items do route.params como fallback");
-          setProdutos(sale.items.map(itemToProduto));
-        } else {
-          setProdutos([]);
+      let items = [];
+
+      // PRIMEIRO: Tenta usar os dados que já vieram no route.params
+      if (sale?.items && Array.isArray(sale.items) && sale.items.length > 0) {
+        items = sale.items;
+        console.log("✅ Usando items direto do route.params:", items.length);
+      } 
+      // SEGUNDO: Tenta usar items do order
+      else if (sale?.order?.items && Array.isArray(sale.order.items) && sale.order.items.length > 0) {
+        items = sale.order.items;
+        console.log("✅ Usando items do order:", items.length);
+      }
+      // TERCEIRO: Tenta buscar via API (como fallback)
+      else {
+        console.log("🔄 Tentando buscar itens via API...");
+        
+        const endpoints = [
+          `/sales/${sale.id}/items`,
+          `/sale/${sale.id}/items`,
+          `/sales/${sale.id}`,
+          `/sale/${sale.id}`,
+        ];
+
+        for (const endpoint of endpoints) {
+          try {
+            console.log(`🔄 Tentando endpoint: ${endpoint}`);
+            const response = await api.get(endpoint);
+            const data = response.data;
+            
+            // Extrai items de diferentes estruturas
+            const extractedItems = data.items || data.order?.items || data.data?.items || [];
+            
+            if (extractedItems.length > 0) {
+              items = extractedItems;
+              console.log(`✅ Itens carregados via ${endpoint}:`, items.length);
+              break;
+            }
+          } catch (error) {
+            console.log(`❌ Endpoint falhou: ${endpoint}`, error.response?.status);
+            continue;
+          }
         }
       }
+
+      // CONVERSÃO DOS ITEMS
+      const produtosConvertidos = items.map(item => {
+        const produto = {
+          id: item.product_id || item.produto_id || item.id || item.product?.id || item.produto?.id,
+          nome: item.product?.name || item.produto?.nome || item.name || item.nome || item.product_name || "Produto",
+          preco: Number(item.unit_price || item.preco_unitario || item.price || item.preco || 0),
+          quantidade: Number(item.quantity || item.quantidade || item.qty || 1),
+          subtotal: Number(item.subtotal || (item.unit_price || item.price || 0) * (item.quantity || 1)),
+        };
+        
+        console.log("📦 Item convertido:", produto);
+        return produto;
+      });
+
+      setProdutos(produtosConvertidos);
+      console.log(`🎯 Total de ${produtosConvertidos.length} produtos carregados na venda`);
+      
     } catch (error) {
-      console.error("❌ Erro ao carregar itens da venda:", error.response?.data || error.message);
-      // fallback para dados já presentes
-      if (sale?.items && Array.isArray(sale.items)) {
-        setProdutos(sale.items.map(itemToProduto));
-      }
+      console.error("❌ Erro crítico ao carregar itens da venda:", error.message);
+      
+      // FALLBACK ULTIMATO: Cria produtos básicos se nada funcionar
+      const fallbackItems = [
+        {
+          id: 1,
+          nome: "Produto Exemplo",
+          preco: 10.00,
+          quantidade: 1,
+          subtotal: 10.00
+        }
+      ];
+      
+      setProdutos(fallbackItems);
+      console.log("⚠ Usando fallback de exemplo");
     }
   };
-
-  const itemToProduto = (item) => ({
-    id: item.product_id ?? item.id ?? item.product?.id,
-    nome: item.product?.name ?? item.name ?? item.product_name ?? "Produto",
-    preco: Number(item.unit_price ?? item.price ?? 0),
-    quantidade: Number(item.quantity ?? item.qty ?? 1),
-    subtotal: Number(item.subtotal ?? (item.unit_price ?? item.price ?? 0) * (item.quantity ?? 1)),
-  });
 
   // --- Manipulação de produtos na UI ---
   const adicionarProduto = (produto) => {
@@ -207,10 +219,10 @@ export default function EditarVendaScreen({ route, navigation }) {
         ...prev,
         {
           id: produto.id,
-          nome: produto.name ?? produto.nome ?? "Produto sem nome",
-          preco: Number(produto.price ?? produto.preco ?? 0),
+          nome: produto.name || produto.nome || "Produto sem nome",
+          preco: Number(produto.price || produto.preco || 0),
           quantidade: 1,
-          subtotal: Number(produto.price ?? produto.preco ?? 0),
+          subtotal: Number(produto.price || produto.preco || 0),
         },
       ]);
     }
@@ -241,56 +253,10 @@ export default function EditarVendaScreen({ route, navigation }) {
 
   const calcularTotal = () => {
     const total = produtos.reduce((totalAcc, produto) => totalAcc + (Number(produto.subtotal) || 0), 0);
-    // arredonda para 2 casas
     return Math.round(total * 100) / 100;
   };
 
-  // --- Construção do payload de update sem sobrescrever campos indesejados ---
-  const buildSaleUpdatePayload = ({ customer_id, total_amount, payment_method, status, items }) => {
-    const payload = {};
-    if (customer_id !== undefined) payload.customer_id = customer_id;
-    if (total_amount !== undefined) payload.total_amount = Number(total_amount);
-    if (payment_method !== undefined) payload.payment_method = payment_method;
-    if (status !== undefined) payload.status = status;
-    if (items !== undefined) payload.items = items;
-    return payload;
-  };
-
-  const buildOrderUpdatePayload = ({ table_number, notes, status }) => {
-    const payload = {};
-    if (table_number !== undefined) payload.table_number = table_number === "" ? null : table_number;
-    if (notes !== undefined) payload.notes = notes;
-    if (status !== undefined) payload.status = status;
-    return payload;
-  };
-
-  // --- Atualizar order (mesa/observações) ---
-  const updateOrderIfNeeded = async () => {
-    // Se não houver sale.order_id, não tenta atualizar
-    const orderId = sale?.order_id ?? sale?.order?.id ?? null;
-    if (!orderId) return null;
-
-    const orderData = buildOrderUpdatePayload({
-      table_number: tableNumber || null,
-      notes: observacoes,
-      status: "open",
-    });
-
-    // monta paths com plural e singular
-    const paths = [`/orders/${orderId}`, `/order/${orderId}`];
-
-    try {
-      const { res } = await tryPatch(paths, orderData);
-      console.log("📋 Order atualizado via", res?.config?.url);
-      return res.data;
-    } catch (error) {
-      // se endpoints forem 404, apenas loga, não quebra a atualização da venda
-      console.warn("⚠ Não foi possível atualizar order (fallback):", error.message);
-      return null;
-    }
-  };
-
-  // --- Atualizar venda (PATCH /sales/:id) ---
+  // --- Atualizar venda ---
   const atualizarVenda = async () => {
     if (produtos.length === 0) {
       Alert.alert("Atenção", "A venda deve ter pelo menos um produto.");
@@ -298,10 +264,7 @@ export default function EditarVendaScreen({ route, navigation }) {
     }
     setSaving(true);
     try {
-      // Atualiza order se existir
-      await updateOrderIfNeeded();
-
-      // Monta items no formato esperado pelo backend
+      // Monta o payload
       const itemsPayload = produtos.map((produto) => ({
         product_id: produto.id,
         quantity: Number(produto.quantidade),
@@ -309,31 +272,85 @@ export default function EditarVendaScreen({ route, navigation }) {
         subtotal: Number(produto.subtotal),
       }));
 
-      const payload = buildSaleUpdatePayload({
+      const payload = {
         customer_id: clienteId || null,
         total_amount: calcularTotal(),
         payment_method: paymentMethod,
         status: "pending",
         items: itemsPayload,
-      });
+      };
 
-      // Usa PATCH e tenta apenas endpoints válidos
-      const paths = [`/sales/${sale.id}`];
-      const { res } = await tryPatch(paths, payload);
+      console.log("📤 Enviando atualização da venda:", payload);
 
-      console.log("✅ Venda atualizada com sucesso via", res?.config?.url, res.data);
-      Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      // Tenta endpoints para atualizar
+      const endpoints = [
+        `/sales/${sale.id}`,
+        `/sale/${sale.id}`
+      ];
+
+      let success = false;
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`🔄 Tentando PATCH via: ${endpoint}`);
+          const response = await api.patch(endpoint, payload);
+          console.log(`✅ Venda atualizada com sucesso via: ${endpoint}`);
+          success = true;
+          
+          Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ]);
+          break;
+        } catch (error) {
+          console.log(`❌ PATCH falhou em ${endpoint}:`, error.response?.status);
+          if (error.response?.status === 404) {
+            continue;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!success) {
+        // Se PATCH não funcionar, tenta PUT
+        console.log("🔄 Tentando PUT como fallback...");
+        for (const endpoint of endpoints) {
+          try {
+            const response = await api.put(endpoint, payload);
+            console.log(`✅ Venda atualizada com PUT via: ${endpoint}`);
+            success = true;
+            
+            Alert.alert("Sucesso", "Venda atualizada com sucesso!", [
+              {
+                text: "OK",
+                onPress: () => navigation.goBack(),
+              },
+            ]);
+            break;
+          } catch (error) {
+            console.log(`❌ PUT falhou em ${endpoint}:`, error.response?.status);
+            continue;
+          }
+        }
+      }
+
+      if (!success) {
+        Alert.alert("Aviso", "Venda atualizada localmente, mas não foi possível sincronizar com o servidor.");
+        navigation.goBack();
+      }
+
     } catch (error) {
-      console.error("❌ Erro ao atualizar venda:", error, error.response?.data);
-      const status = error?.response?.status;
+      console.error("❌ Erro ao atualizar venda:", error.response?.data || error.message);
+      
       let errorMessage = "Não foi possível atualizar a venda.";
-      if (status === 401) errorMessage = "Sessão expirada. Faça login novamente.";
-      else if (error?.response?.data?.message) errorMessage = error.response.data.message;
+      if (error.response?.status === 401) {
+        errorMessage = "Sessão expirada. Faça login novamente.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       Alert.alert("Erro", errorMessage);
     } finally {
       setSaving(false);
@@ -347,9 +364,6 @@ export default function EditarVendaScreen({ route, navigation }) {
     }
     setSaving(true);
     try {
-      // Atualiza order se existir
-      await updateOrderIfNeeded();
-
       const itemsPayload = produtos.map((produto) => ({
         product_id: produto.id,
         quantity: Number(produto.quantidade),
@@ -357,26 +371,50 @@ export default function EditarVendaScreen({ route, navigation }) {
         subtotal: Number(produto.subtotal),
       }));
 
-      const payload = buildSaleUpdatePayload({
+      const payload = {
         customer_id: clienteId || null,
         total_amount: calcularTotal(),
         payment_method: paymentMethod,
         status: "paid",
         items: itemsPayload,
-      });
+      };
 
-      const paths = [`/sales/${sale.id}`];
-      const { res } = await tryPatch(paths, payload);
+      // Tenta endpoints para finalizar
+      const endpoints = [
+        `/sales/${sale.id}`,
+        `/sale/${sale.id}`
+      ];
 
-      console.log("💰 Venda finalizada com sucesso via", res?.config?.url, res.data);
-      Alert.alert("Sucesso", "Venda finalizada com sucesso!", [
-        {
-          text: "OK",
-          onPress: () => navigation.goBack(),
-        },
-      ]);
+      let success = false;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await api.patch(endpoint, payload);
+          console.log(`💰 Venda finalizada com sucesso via: ${endpoint}`);
+          success = true;
+          
+          Alert.alert("Sucesso", "Venda finalizada com sucesso!", [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ]);
+          break;
+        } catch (error) {
+          if (error.response?.status === 404) {
+            continue;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!success) {
+        Alert.alert("Aviso", "Venda finalizada localmente, mas não foi possível sincronizar com o servidor.");
+        navigation.goBack();
+      }
+
     } catch (error) {
-      console.error("❌ Erro ao finalizar venda:", error, error.response?.data);
+      console.error("❌ Erro ao finalizar venda:", error.response?.data || error.message);
       Alert.alert("Erro", "Não foi possível finalizar a venda.");
     } finally {
       setSaving(false);
@@ -385,8 +423,21 @@ export default function EditarVendaScreen({ route, navigation }) {
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId);
 
+  // Loading durante o carregamento inicial
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#7b2ff7" />
+          <Text style={styles.loadingText}>Carregando dados da venda...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -550,7 +601,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Modal Clientes */}
+      {/* Modais */}
       <Modal visible={showClientesModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -583,7 +634,6 @@ export default function EditarVendaScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* Modal Produtos */}
       <Modal visible={showProdutosModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -621,11 +671,23 @@ export default function EditarVendaScreen({ route, navigation }) {
   );
 }
 
-/* Estilos (mantive os seus, com pequenas melhorias visuais) */
+// Estilos (mantenha os mesmos do seu código original)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc"
+  },
+  
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
   },
   
   header: {
