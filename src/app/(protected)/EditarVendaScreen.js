@@ -400,6 +400,99 @@ export default function EditarVendaScreen({ route, navigation }) {
     return Math.round(total * 100) / 100;
   };
 
+  // ✅ NOVA FUNÇÃO: Cancelar Venda
+  const cancelarVenda = async () => {
+    Alert.alert(
+      "Cancelar Venda",
+      "Tem certeza que deseja cancelar esta venda? Esta ação não pode ser desfeita.",
+      [
+        {
+          text: "Manter Venda",
+          style: "cancel"
+        },
+        {
+          text: "Cancelar Venda",
+          style: "destructive",
+          onPress: async () => {
+            setSaving(true);
+            try {
+              console.log("❌ Cancelando venda ID:", sale.id);
+              
+              // Payload para cancelar a venda
+              const payload = {
+                status: "cancelled",
+                // Mantém os outros dados para auditoria
+                total_amount: calcularTotal(),
+                payment_method: paymentMethod,
+              };
+
+              console.log("📤 Payload de cancelamento:", payload);
+
+              // Tenta cancelar via PATCH
+              const response = await api.patch(`/sales/${sale.id}`, payload);
+              console.log("✅ Venda cancelada com sucesso:", response.data);
+
+              Alert.alert(
+                "Venda Cancelada", 
+                "A venda foi cancelada com sucesso.",
+                [
+                  {
+                    text: "OK",
+                    onPress: () => navigation.goBack(),
+                  },
+                ]
+              );
+            } catch (error) {
+              console.error(
+                "❌ Erro ao cancelar venda:",
+                error.response?.data || error.message
+              );
+
+              let errorMessage = "Não foi possível cancelar a venda.";
+
+              // Tenta fallback com PUT
+              if (error.response?.status === 404 || error.response?.status === 405) {
+                try {
+                  console.log("🔄 Tentando PUT como fallback para cancelamento...");
+                  const putResponse = await api.put(`/sales/${sale.id}`, {
+                    status: "cancelled",
+                    total_amount: calcularTotal(),
+                    payment_method: paymentMethod,
+                  });
+
+                  console.log("✅ Venda cancelada via PUT:", putResponse.data);
+
+                  Alert.alert(
+                    "Venda Cancelada", 
+                    "A venda foi cancelada com sucesso.",
+                    [
+                      {
+                        text: "OK",
+                        onPress: () => navigation.goBack(),
+                      },
+                    ]
+                  );
+                  return;
+                } catch (putError) {
+                  console.error("❌ PUT também falhou:", putError.response?.data);
+                  errorMessage = "Endpoint não encontrado. Verifique a URL da API.";
+                }
+              } else if (error.response?.status === 401) {
+                errorMessage = "Sessão expirada. Faça login novamente.";
+              } else if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+              }
+
+              Alert.alert("Erro", errorMessage);
+            } finally {
+              setSaving(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // --- Atualizar venda (COM ITENS) ---
   const atualizarVenda = async () => {
     if (produtos.length === 0) {
@@ -804,6 +897,22 @@ export default function EditarVendaScreen({ route, navigation }) {
 
       <View style={styles.footer}>
         <View style={styles.footerButtons}>
+          {/* ✅ BOTÃO CANCELAR VENDA ADICIONADO */}
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={cancelarVenda}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="close-circle" size={20} color="#fff" />
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.button, styles.updateButton]}
             onPress={atualizarVenda}
@@ -812,7 +921,7 @@ export default function EditarVendaScreen({ route, navigation }) {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Atualizar Venda</Text>
+              <Text style={styles.buttonText}>Atualizar</Text>
             )}
           </TouchableOpacity>
 
@@ -826,7 +935,7 @@ export default function EditarVendaScreen({ route, navigation }) {
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                <Text style={styles.buttonText}>Finalizar Venda</Text>
+                <Text style={styles.buttonText}>Finalizar</Text>
               </>
             )}
           </TouchableOpacity>
@@ -981,7 +1090,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
+// ✅ ESTILOS ATUALIZADOS com botão de cancelar
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1301,6 +1410,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
 
+  // ✅ NOVO ESTILO: Botão Cancelar
+  cancelButton: {
+    backgroundColor: "#dc3545",
+  },
+
   updateButton: {
     backgroundColor: "#7b2ff7",
   },
@@ -1311,7 +1425,7 @@ const styles = StyleSheet.create({
 
   buttonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     marginLeft: 8,
   },
