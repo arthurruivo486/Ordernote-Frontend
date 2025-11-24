@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +23,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
+  const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [clienteId, setClienteId] = useState(sale?.customer_id ?? null);
   const [tableNumber, setTableNumber] = useState(
     sale?.order?.table_number ?? sale?.table_number ?? ""
@@ -35,6 +37,13 @@ export default function EditarVendaScreen({ route, navigation }) {
   const [showClientesModal, setShowClientesModal] = useState(false);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // Estados para busca e filtro de produtos
+  const [termoBusca, setTermoBusca] = useState('');
+  const [grupoSelecionado, setGrupoSelecionado] = useState('todos');
+  const [grupos, setGrupos] = useState([]);
+  const [gruposCarregados, setGruposCarregados] = useState([]);
+
   const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -45,16 +54,45 @@ export default function EditarVendaScreen({ route, navigation }) {
     }
 
     carregarDados();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
-  // --- Carregamento de dados ---
+  // ✅ NOVA FUNÇÃO: Carregar grupos da API
+  const carregarGrupos = async () => {
+    try {
+      console.log("📂 Carregando grupos de produtos para edição...");
+      const response = await api.get("/product_groups");
+      
+      if (response.data) {
+        const data = response.data;
+        let gruposData = [];
+        
+        // Diferentes formatos que a API pode retornar
+        if (Array.isArray(data)) {
+          gruposData = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          gruposData = data.data;
+        } else if (data.product_groups && Array.isArray(data.product_groups)) {
+          gruposData = data.product_groups;
+        } else if (data.groups && Array.isArray(data.groups)) {
+          gruposData = data.groups;
+        }
+        
+        console.log(`✅ ${gruposData.length} grupos carregados para edição`);
+        setGruposCarregados(gruposData);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao carregar grupos:", error.response?.data || error.message);
+      setGruposCarregados([]);
+    }
+  };
+
   const carregarDados = async () => {
     setLoading(true);
     try {
       await Promise.all([
         carregarClientes(),
         carregarProdutos(),
+        carregarGrupos(),
         carregarItensVenda(),
       ]);
     } catch (error) {
@@ -93,11 +131,82 @@ export default function EditarVendaScreen({ route, navigation }) {
         : data.products || data.produtos || data.data || [];
 
       setProdutosDisponiveis(produtosData);
+      setProdutosFiltrados(produtosData);
       console.log(`✅ ${produtosData.length} produtos carregados`);
     } catch (error) {
       console.error("❌ Erro ao carregar produtos:", error.message);
       setProdutosDisponiveis([]);
+      setProdutosFiltrados([]);
     }
+  };
+
+  // ✅ FUNÇÃO: Encontrar nome do grupo
+  const encontrarNomeGrupo = (groupId) => {
+    if (!groupId) return 'Sem Grupo';
+    
+    const grupo = gruposCarregados.find(g => g.id === groupId);
+    return grupo ? grupo.name || grupo.nome || `Grupo ${groupId}` : `Grupo ${groupId}`;
+  };
+
+  // ✅ FUNÇÃO: Extrair grupos únicos dos produtos
+  const extrairGruposDosProdutos = (produtosData, gruposAPI) => {
+    const gruposUnicos = [...new Map(produtosData
+      .filter(p => p.group_id || p.grupo_id)
+      .map(p => {
+        const grupoId = p.group_id || p.grupo_id;
+        const grupoNome = encontrarNomeGrupo(grupoId);
+        return [grupoId, { id: grupoId, nome: grupoNome }];
+      })).values()];
+    
+    // Adicionar opção "Todos" no início
+    const gruposComTodos = [
+      { id: 'todos', nome: 'Todos' },
+      ...gruposUnicos
+    ];
+    
+    console.log(`📂 ${gruposUnicos.length} grupos encontrados nos produtos`);
+    return gruposComTodos;
+  };
+
+  // ✅ useEffect: Processar grupos quando dados carregarem
+  useEffect(() => {
+    if (gruposCarregados.length > 0 && produtosDisponiveis.length > 0) {
+      console.log("🔄 Processando grupos dos produtos para edição...");
+      const gruposProcessados = extrairGruposDosProdutos(produtosDisponiveis, gruposCarregados);
+      setGrupos(gruposProcessados);
+    }
+  }, [gruposCarregados, produtosDisponiveis]);
+
+  // ✅ FUNÇÕES DE BUSCA E FILTRO DE PRODUTOS
+  const handleBusca = (texto) => {
+    setTermoBusca(texto);
+    filtrarProdutos(texto, grupoSelecionado);
+  };
+
+  const handleFiltroGrupo = (grupoId) => {
+    setGrupoSelecionado(grupoId);
+    filtrarProdutos(termoBusca, grupoId);
+  };
+
+  const filtrarProdutos = (busca, grupoId) => {
+    let filtrados = [...produtosDisponiveis];
+
+    // Filtro por busca
+    if (busca) {
+      filtrados = filtrados.filter(produto =>
+        produto.name?.toLowerCase().includes(busca.toLowerCase()) ||
+        produto.nome?.toLowerCase().includes(busca.toLowerCase())
+      );
+    }
+
+    // Filtro por grupo
+    if (grupoId !== 'todos') {
+      filtrados = filtrados.filter(produto => 
+        produto.group_id === grupoId || produto.grupo_id === grupoId
+      );
+    }
+
+    setProdutosFiltrados(filtrados);
   };
 
   const carregarItensVenda = async () => {
@@ -291,7 +400,6 @@ export default function EditarVendaScreen({ route, navigation }) {
     return Math.round(total * 100) / 100;
   };
 
-  // --- Atualizar venda ---
   // --- Atualizar venda (COM ITENS) ---
   const atualizarVenda = async () => {
     if (produtos.length === 0) {
@@ -725,7 +833,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Modais */}
+      {/* Modal de Clientes */}
       <Modal visible={showClientesModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -764,54 +872,121 @@ export default function EditarVendaScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      <Modal visible={showProdutosModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Produto</Text>
-              <TouchableOpacity onPress={() => setShowProdutosModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              {produtosDisponiveis.length === 0 ? (
-                <Text style={styles.emptyModalText}>
-                  Nenhum produto disponível
-                </Text>
-              ) : (
-                produtosDisponiveis.map((produto) => (
-                  <TouchableOpacity
-                    key={produto.id}
-                    style={styles.produtoModalItem}
-                    onPress={() => adicionarProduto(produto)}
-                  >
-                    <View style={styles.produtoModalInfo}>
-                      <Text style={styles.produtoModalNome}>
-                        {produto.name ?? produto.nome}
-                      </Text>
-                      <Text style={styles.produtoModalPreco}>
-                        R${" "}
-                        {Number(produto.price ?? produto.preco ?? 0).toFixed(2)}
-                      </Text>
-                    </View>
-                    <Ionicons name="add-circle" size={24} color="#7b2ff7" />
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+      {/* ✅ Modal de Produtos ATUALIZADO com Grupos e Busca */}
+      <Modal
+        visible={showProdutosModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowProdutosModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Selecionar Produto</Text>
+            <TouchableOpacity onPress={() => setShowProdutosModal(false)}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          {/* Barra de Pesquisa */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar produtos..."
+              value={termoBusca}
+              onChangeText={handleBusca}
+              placeholderTextColor="#999"
+            />
+            {termoBusca ? (
+              <TouchableOpacity onPress={() => handleBusca('')}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* Filtro por Grupos */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.gruposContainer}
+          >
+            {grupos.map(grupo => {
+              const produtosNoGrupo = grupo.id === 'todos' 
+                ? produtosDisponiveis 
+                : produtosDisponiveis.filter(p => 
+                    p.group_id === grupo.id || p.grupo_id === grupo.id
+                  );
+              
+              return (
+                <TouchableOpacity
+                  key={grupo.id}
+                  style={[
+                    styles.grupoItem,
+                    grupoSelecionado === grupo.id && styles.grupoItemSelecionado
+                  ]}
+                  onPress={() => handleFiltroGrupo(grupo.id)}
+                >
+                  <Text style={[
+                    styles.grupoText,
+                    grupoSelecionado === grupo.id && styles.grupoTextSelecionado
+                  ]}>
+                    {grupo.nome} ({produtosNoGrupo.length})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Lista de Produtos Filtrados */}
+          <FlatList
+            data={produtosFiltrados}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.produtosList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.produtoItemModal}
+                onPress={() => adicionarProduto(item)}
+              >
+                <View style={styles.produtoInfoModal}>
+                  <Text style={styles.produtoNomeModal}>
+                    {item.name || item.nome}
+                  </Text>
+                  <Text style={styles.produtoPrecoModal}>
+                    R$ {parseFloat(item.price || item.preco || 0).toFixed(2)}
+                  </Text>
+                  {/* ✅ Mostra o nome do grupo */}
+                  <Text style={styles.produtoGrupoModal}>
+                    {encontrarNomeGrupo(item.group_id || item.grupo_id)}
+                  </Text>
+                </View>
+                <Ionicons name="add-circle" size={24} color="#7b2ff7" />
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyStateText}>
+                  Nenhum produto encontrado
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {termoBusca ? 'Tente alterar os termos da busca' : 'Nenhum produto disponível'}
+                </Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// Estilos (mantenha os mesmos do seu código original)
+// ✅ ESTILOS ATUALIZADOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc",
-    paddingBottom: 10, // Adicionado para dar espaço
+    paddingBottom: 10,
   },
 
   loadingContainer: {
@@ -848,7 +1023,7 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingBottom: 30, // Espaço extra para os botões não ficarem colados
+    paddingBottom: 30,
     flexGrow: 1,
   },
 
@@ -1104,12 +1279,11 @@ const styles = StyleSheet.create({
 
   footer: {
     padding: 20,
-    paddingBottom: 25, // Aumentado para dar mais espaço
+    paddingBottom: 25,
     backgroundColor: "#fff",
     borderTopWidth: 1,
     borderTopColor: "#eee",
-    marginBottom:120,
-    // Remove position absolute se existir
+    marginBottom: 120,
   },
 
   footerButtons: {
@@ -1146,6 +1320,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
+  },
+
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
 
   modalContent: {
@@ -1195,28 +1374,121 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  produtoModalItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+  // ✅ NOVOS ESTILOS PARA GRUPOS E BUSCA
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    margin: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
 
-  produtoModalInfo: {
+  searchIcon: {
+    marginRight: 8,
+  },
+
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+
+  gruposContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    maxHeight: 50,
+  },
+
+  grupoItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+
+  grupoItemSelecionado: {
+    backgroundColor: '#7b2ff7',
+    borderColor: '#7b2ff7',
+  },
+
+  grupoText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+
+  grupoTextSelecionado: {
+    color: '#fff',
+  },
+
+  produtosList: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+
+  produtoItemModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+
+  produtoInfoModal: {
     flex: 1,
   },
 
-  produtoModalNome: {
+  produtoNomeModal: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#333",
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
 
-  produtoModalPreco: {
+  produtoPrecoModal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#7b2ff7',
+    marginBottom: 2,
+  },
+
+  produtoGrupoModal: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+
+  emptyStateText: {
+    marginTop: 10,
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+
+  emptyStateSubtext: {
+    color: '#ccc',
     fontSize: 14,
-    color: "#7b2ff7",
+    textAlign: 'center',
     marginTop: 4,
   },
 });

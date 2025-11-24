@@ -19,6 +19,7 @@ export default function NovaDeliveryScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [clientesFiltrados, setClientesFiltrados] = useState([]); // ✅ Novo estado para clientes filtrados
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [clienteId, setClienteId] = useState(null);
@@ -34,6 +35,7 @@ export default function NovaDeliveryScreen({ navigation }) {
   
   // Estados para busca e filtro
   const [termoBusca, setTermoBusca] = useState('');
+  const [termoBuscaClientes, setTermoBuscaClientes] = useState(""); // ✅ Novo estado para busca de clientes
   const [grupoSelecionado, setGrupoSelecionado] = useState('todos');
   const [grupos, setGrupos] = useState([]);
   const [gruposCarregados, setGruposCarregados] = useState([]);
@@ -54,6 +56,77 @@ export default function NovaDeliveryScreen({ navigation }) {
     carregarProdutos();
     carregarGrupos();
   }, [isAuthenticated]);
+
+  // ✅ FUNÇÃO ATUALIZADA: Carregar clientes
+  const carregarClientes = async () => {
+    try {
+      console.log("📞 Carregando clientes para delivery...");
+      const response = await api.get("/customers");
+      
+      if (response.data) {
+        const data = response.data;
+        const clientesData = Array.isArray(data) ? data : data.customers || data.data || [];
+        setClientes(clientesData);
+        setClientesFiltrados(clientesData); // ✅ Inicializar clientes filtrados
+        console.log(`✅ ${clientesData.length} clientes carregados para delivery`);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao carregar clientes:", error.response?.data || error.message);
+      Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
+    }
+  };
+
+  // ✅ NOVA FUNÇÃO: Buscar clientes
+  const handleBuscaClientes = (texto) => {
+    setTermoBuscaClientes(texto);
+    
+    if (!texto.trim()) {
+      setClientesFiltrados(clientes);
+      return;
+    }
+
+    const filtrados = clientes.filter((cliente) => {
+      const nome = cliente.name || cliente.nome || "";
+      const telefone = cliente.phone || cliente.telefone || "";
+      const email = cliente.email || "";
+
+      return (
+        nome.toLowerCase().includes(texto.toLowerCase()) ||
+        telefone.includes(texto) ||
+        email.toLowerCase().includes(texto.toLowerCase())
+      );
+    });
+
+    setClientesFiltrados(filtrados);
+  };
+
+  // ✅ NOVA FUNÇÃO: Limpar busca de clientes
+  const limparBuscaClientes = () => {
+    setTermoBuscaClientes("");
+    setClientesFiltrados(clientes);
+  };
+
+  // ✅ NOVA FUNÇÃO: Selecionar cliente
+  const selecionarCliente = (cliente) => {
+    setClienteId(cliente.id);
+    // Preencher endereço automaticamente se o cliente já tiver
+    if (cliente.address_street && cliente.address_number) {
+      setEndereco({
+        rua: cliente.address_street,
+        numero: cliente.address_number,
+        complemento: cliente.address_notes || ""
+      });
+    }
+    setShowClientesModal(false);
+    setTermoBuscaClientes(""); // Limpar busca ao selecionar
+  };
+
+  // ✅ NOVA FUNÇÃO: Remover cliente selecionado
+  const removerClienteSelecionado = () => {
+    setClienteId(null);
+    // Limpar endereço quando remover o cliente
+    setEndereco({ rua: "", numero: "", complemento: "" });
+  };
 
   // ✅ NOVA FUNÇÃO: Carregar grupos da API
   const carregarGrupos = async () => {
@@ -82,23 +155,6 @@ export default function NovaDeliveryScreen({ navigation }) {
     } catch (error) {
       console.error("❌ Erro ao carregar grupos:", error.response?.data || error.message);
       setGruposCarregados([]);
-    }
-  };
-
-  const carregarClientes = async () => {
-    try {
-      console.log("📞 Carregando clientes para delivery...");
-      const response = await api.get("/customers");
-      
-      if (response.data) {
-        const data = response.data;
-        const clientesData = Array.isArray(data) ? data : data.customers || data.data || [];
-        setClientes(clientesData);
-        console.log(`✅ ${clientesData.length} clientes carregados para delivery`);
-      }
-    } catch (error) {
-      console.error("❌ Erro ao carregar clientes:", error.response?.data || error.message);
-      Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
     }
   };
 
@@ -354,9 +410,21 @@ export default function NovaDeliveryScreen({ navigation }) {
           <Text style={styles.userName}>{user?.name} (ID: {user?.id})</Text>
         </View>
 
-        {/* Seção Cliente */}
+        {/* ✅ SEÇÃO CLIENTE ATUALIZADA */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cliente</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cliente</Text>
+            {clienteSelecionado && (
+              <TouchableOpacity 
+                style={styles.removerClienteButton}
+                onPress={removerClienteSelecionado}
+              >
+                <Ionicons name="close-circle" size={16} color="#ff4444" />
+                <Text style={styles.removerClienteText}>Remover</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          
           <TouchableOpacity 
             style={styles.selectButton}
             onPress={() => setShowClientesModal(true)}
@@ -366,6 +434,19 @@ export default function NovaDeliveryScreen({ navigation }) {
             </Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
+          
+          {clienteSelecionado && (
+            <View style={styles.clienteInfo}>
+              <Text style={styles.clienteInfoText}>
+                {clienteSelecionado.phone && `📞 ${clienteSelecionado.phone}`}
+              </Text>
+              {clienteSelecionado.email && (
+                <Text style={styles.clienteInfoText}>
+                  ✉️ {clienteSelecionado.email}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Seção Endereço */}
@@ -507,54 +588,97 @@ export default function NovaDeliveryScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Modal de Clientes */}
+      {/* ✅ MODAL DE CLIENTES ATUALIZADO COM BARRA DE PESQUISA */}
       <Modal
         visible={showClientesModal}
         transparent={true}
         animationType="slide"
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Cliente</Text>
-              <TouchableOpacity onPress={() => setShowClientesModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              {clientes.length === 0 ? (
-                <Text style={styles.emptyModalText}>Nenhum cliente cadastrado</Text>
-              ) : (
-                clientes.map(cliente => (
-                  <TouchableOpacity
-                    key={cliente.id}
-                    style={styles.clienteItem}
-                    onPress={() => {
-                      setClienteId(cliente.id);
-                      // Preencher endereço automaticamente se o cliente já tiver
-                      if (cliente.address_street && cliente.address_number) {
-                        setEndereco({
-                          rua: cliente.address_street,
-                          numero: cliente.address_number,
-                          complemento: cliente.address_notes || ""
-                        });
-                      }
-                      setShowClientesModal(false);
-                    }}
-                  >
-                    <Text style={styles.clienteNome}>{cliente.name || cliente.nome}</Text>
-                    {cliente.phone && <Text style={styles.clientePhone}>{cliente.phone}</Text>}
-                    {cliente.address_street && (
-                      <Text style={styles.clienteEndereco}>
-                        {cliente.address_street}, {cliente.address_number}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Selecionar Cliente</Text>
+            <TouchableOpacity onPress={() => {
+              setShowClientesModal(false);
+              limparBuscaClientes();
+            }}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          {/* ✅ BARRA DE PESQUISA PARA CLIENTES */}
+          <View style={styles.searchContainer}>
+            <Ionicons
+              name="search"
+              size={20}
+              color="#999"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar clientes por nome, telefone ou email..."
+              value={termoBuscaClientes}
+              onChangeText={handleBuscaClientes}
+              placeholderTextColor="#999"
+            />
+            {termoBuscaClientes ? (
+              <TouchableOpacity onPress={limparBuscaClientes}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* ✅ LISTA DE CLIENTES FILTRADOS */}
+          <FlatList
+            data={clientesFiltrados}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.clientesList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.clienteItemModal}
+                onPress={() => selecionarCliente(item)}
+              >
+                <View style={styles.clienteInfoModal}>
+                  <Text style={styles.clienteNomeModal}>
+                    {item.name || item.nome}
+                  </Text>
+                  {item.phone && (
+                    <Text style={styles.clienteDetailModal}>
+                      📞 {item.phone}
+                    </Text>
+                  )}
+                  {item.email && (
+                    <Text style={styles.clienteDetailModal}>
+                      ✉️ {item.email}
+                    </Text>
+                  )}
+                  {item.address_street && (
+                    <Text style={styles.clienteEnderecoModal}>
+                      📍 {item.address_street}, {item.address_number}
+                      {item.address_notes ? ` - ${item.address_notes}` : ''}
+                    </Text>
+                  )}
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyStateText}>
+                  {termoBuscaClientes
+                    ? "Nenhum cliente encontrado"
+                    : "Nenhum cliente cadastrado"}
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {termoBuscaClientes
+                    ? "Tente alterar os termos da busca"
+                    : "Cadastre clientes na tela de Clientes"}
+                </Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
       </Modal>
 
       {/* ✅ Modal de Produtos ATUALIZADO com Grupos */}
@@ -743,21 +867,26 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    backgroundColor: "#f9f9f9",
-    marginBottom: 10,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  enderecoRow: {
+  // ✅ NOVOS ESTILOS PARA SEÇÃO CLIENTE
+  removerClienteButton: {
     flexDirection: "row",
+    alignItems: "center",
+    padding: 4,
+  },
+  removerClienteText: {
+    fontSize: 12,
+    color: "#ff4444",
+    marginLeft: 4,
+  },
+  clienteInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 6,
+  },
+  clienteInfoText: {
+    fontSize: 12,
+    color: "#666",
   },
   selectButton: {
     borderWidth: 1,
@@ -776,6 +905,22 @@ const styles = StyleSheet.create({
   selectButtonPlaceholder: {
     fontSize: 14,
     color: "#999",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: "#f9f9f9",
+    marginBottom: 10,
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  enderecoRow: {
+    flexDirection: "row",
   },
   addButton: {
     flexDirection: "row",
@@ -913,20 +1058,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
   modalContainer: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -941,33 +1075,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  emptyModalText: {
-    textAlign: 'center',
-    color: '#999',
-    fontStyle: 'italic',
-    padding: 20,
-  },
-  clienteItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  clienteNome: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  clientePhone: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  clienteEndereco: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
-  },
-  // ✅ NOVOS ESTILOS PARA GRUPOS E BUSCA
+  // ✅ ESTILOS PARA MODAL DE CLIENTES
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -987,6 +1095,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  clientesList: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  clienteItemModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  clienteInfoModal: {
+    flex: 1,
+  },
+  clienteNomeModal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  clienteDetailModal: {
+    fontSize: 14,
+    color: '#666',
+  },
+  clienteEnderecoModal: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  // Estilos para grupos e produtos
   gruposContainer: {
     paddingHorizontal: 16,
     marginBottom: 8,
