@@ -19,7 +19,6 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import XLSX from "xlsx";
 
-
 export default function SaleScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -58,6 +57,40 @@ export default function SaleScreen({ navigation }) {
       color: "#FF6B35",
     },
   ]);
+
+  // Função para formatar a exibição do pedido/mesa
+  const formatOrderDisplay = (sale) => {
+    if (sale.sale_type === "local" && sale.table_number) {
+      return `Mesa ${sale.table_number}`;
+    }
+    return `Pedido #${sale.id}`;
+  };
+
+  // Função para obter ícone baseado no tipo de venda
+  const getSaleIcon = (sale, tipo) => {
+    if (tipo === "andamento") {
+      return "time-outline";
+    }
+
+    if (sale.sale_type === "delivery") {
+      return "bicycle-outline";
+    }
+
+    return "checkmark-circle-outline";
+  };
+
+  // Função para obter cor do ícone baseado no tipo de venda
+  const getSaleIconColor = (sale, tipo) => {
+    if (tipo === "andamento") {
+      return "#FFA500";
+    }
+
+    if (sale.sale_type === "delivery") {
+      return "#FF6B35";
+    }
+
+    return "#4CAF50";
+  };
 
   // Busca vendas e clientes
   const fetchData = useCallback(async () => {
@@ -385,6 +418,11 @@ export default function SaleScreen({ navigation }) {
 
         return {
           ID: v.id ?? "-",
+          "Número/Mesa":
+            v.sale_type === "local" && v.table_number
+              ? `Mesa ${v.table_number}`
+              : `Pedido #${v.id}`,
+          "Tipo Venda": v.sale_type === "local" ? "Local" : "Delivery",
           Data: v.created_at
             ? new Date(v.created_at).toLocaleString("pt-BR")
             : "N/A",
@@ -412,6 +450,8 @@ export default function SaleScreen({ navigation }) {
       // Linha final com TOTAL
       dados.push({
         ID: "",
+        "Número/Mesa": "",
+        "Tipo Venda": "",
         Data: "",
         Cliente: "TOTAL",
         Status: "",
@@ -441,7 +481,7 @@ export default function SaleScreen({ navigation }) {
       const path = FileSystem.documentDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(path, wbout, {
-        encoding: "base64", // <- CORRETO E COMPATÍVEL EM TODAS VERSÕES
+        encoding: "base64",
       });
 
       // --------------------------
@@ -487,76 +527,85 @@ export default function SaleScreen({ navigation }) {
   );
 
   const renderPedidosGrid = (pedidos, tipo) => {
-    const rows = [];
-    for (let i = 0; i < pedidos.length; i += 3) {
-      const rowPedidos = pedidos.slice(i, i + 3);
+  const rows = [];
+  for (let i = 0; i < pedidos.length; i += 3) {
+    const rowPedidos = pedidos.slice(i, i + 3);
 
-      rows.push(
-        <View key={i} style={styles.pedidosRow}>
-          {rowPedidos.map((pedido) => {
-            const pedidoCustomer = customersMap[pedido.customer_id] || null;
-            const pedidoClientName = pedidoCustomer
-              ? pedidoCustomer.name
-              : pedido.customer_id
-              ? `Cliente #${pedido.customer_id}`
-              : "Venda Local";
+    rows.push(
+      <View key={i} style={styles.pedidosRow}>
+        {rowPedidos.map((pedido) => {
+          const pedidoCustomer = customersMap[pedido.customer_id] || null;
+          const pedidoClientName = pedidoCustomer
+            ? pedidoCustomer.name
+            : pedido.customer_id
+            ? `Cliente #${pedido.customer_id}`
+            : "Venda Local";
 
-            return (
-              <TouchableOpacity
-                key={pedido.id}
-                style={[
-                  styles.pedidoCard,
-                  tipo === "andamento"
-                    ? styles.pedidoAndamento
-                    : styles.pedidoFinalizado,
-                ]}
-                onPress={() => verDetalhesVenda(pedido)}
-              >
-                <View style={styles.pedidoHeader}>
-                  <Text style={styles.pedidoNumero}>#{pedido.id}</Text>
-                  <Ionicons
-                    name={
-                      tipo === "andamento"
-                        ? "time-outline"
-                        : "checkmark-circle-outline"
-                    }
-                    size={16}
-                    color={tipo === "andamento" ? "#FFA500" : "#4CAF50"}
-                  />
+          return (
+            <TouchableOpacity
+              key={pedido.id}
+              style={[
+                styles.pedidoCard,
+                tipo === "andamento"
+                  ? styles.pedidoAndamento
+                  : pedido.sale_type === "delivery"
+                  ? styles.pedidoDelivery
+                  : styles.pedidoFinalizado,
+              ]}
+              onPress={() => verDetalhesVenda(pedido)}
+            >
+              {/* CABEÇALHO DO PEDIDO - ESTILO UNIFICADO */}
+              <View style={styles.pedidoHeader}>
+                <View style={styles.pedidoTitleContainer}>
+                  <Text style={styles.pedidoNumero}>
+                    {formatOrderDisplay(pedido)}
+                  </Text>
+                  {pedido.sale_type === "delivery" && (
+                    <View style={styles.deliveryBadge}>
+                      <Ionicons
+                        name="bicycle-outline"
+                        size={10}
+                        color="#fff"
+                      />
+                      <Text style={styles.deliveryBadgeText}>DELIVERY</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.pedidoCliente} numberOfLines={1}>
-                  {pedidoClientName}
-                </Text>
-                <Text style={styles.pedidoValor}>
-                  {formatBRL(pedido.total_amount)}
-                </Text>
-                <Text style={styles.pedidoData}>
-                  {pedido.created_at
-                    ? new Date(pedido.created_at).toLocaleDateString("pt-BR")
-                    : "Data não disponível"}
-                </Text>
-                {tipo === "andamento" && (
-                  <View style={styles.pedidoBadge}>
-                    <Text style={styles.pedidoBadgeText}>PENDENTE</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-          {rowPedidos.length < 3 &&
-            Array.from({ length: 3 - rowPedidos.length }).map(
-              (_, emptyIndex) => (
-                <View
-                  key={`empty-${emptyIndex}`}
-                  style={styles.pedidoCardVazio}
+                <Ionicons
+                  name={getSaleIcon(pedido, tipo)}
+                  size={18}
+                  color={getSaleIconColor(pedido, tipo)}
                 />
-              )
-            )}
-        </View>
-      );
-    }
-    return rows;
-  };
+              </View>
+              
+              <Text style={styles.pedidoCliente} numberOfLines={1}>
+                {pedidoClientName}
+              </Text>
+              <Text style={styles.pedidoValor}>
+                {formatBRL(pedido.total_amount)}
+              </Text>
+              <Text style={styles.pedidoData}>
+                {pedido.created_at
+                  ? new Date(pedido.created_at).toLocaleDateString("pt-BR")
+                  : "Data não disponível"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+        {rowPedidos.length < 3 &&
+          Array.from({ length: 3 - rowPedidos.length }).map(
+            (_, emptyIndex) => (
+              <View
+                key={`empty-${emptyIndex}`}
+                style={styles.pedidoCardVazio}
+              />
+            )
+          )}
+      </View>
+    );
+  }
+  return rows;
+};
 
   // Modal de seleção de tipo de venda
   const renderSaleTypeModal = () => (
@@ -643,8 +692,27 @@ export default function SaleScreen({ navigation }) {
 
             <ScrollView style={styles.modalBody}>
               <View style={styles.detailSection}>
-                <Text style={styles.detailLabel}>Número do Pedido:</Text>
-                <Text style={styles.detailValue}>#{selectedSale.id}</Text>
+                <Text style={styles.detailLabel}>
+                  {selectedSale.sale_type === "local" &&
+                  selectedSale.table_number
+                    ? "Número da Mesa:"
+                    : "Número do Pedido:"}
+                </Text>
+                <Text style={styles.detailValue}>
+                  {selectedSale.sale_type === "local" &&
+                  selectedSale.table_number
+                    ? `Mesa ${selectedSale.table_number}`
+                    : `#${selectedSale.id}`}
+                </Text>
+              </View>
+
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>Tipo de Venda:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedSale.sale_type === "local"
+                    ? "Venda Local"
+                    : "Delivery"}
+                </Text>
               </View>
 
               <View style={styles.detailSection}>
@@ -864,6 +932,43 @@ export default function SaleScreen({ navigation }) {
                 ))}
               </View>
             </View>
+
+            {/* Filtro por Tipo de Venda */}
+            <View style={styles.filterSection}>
+              <Text style={styles.filterLabel}>Tipo de Venda</Text>
+              <View style={styles.filterOptions}>
+                {[
+                  { value: "all", label: "Todos" },
+                  { value: "local", label: "Local" },
+                  { value: "delivery", label: "Delivery" },
+                ].map((saleType) => (
+                  <TouchableOpacity
+                    key={saleType.value}
+                    style={[
+                      styles.filterOption,
+                      filters.saleType === saleType.value &&
+                        styles.filterOptionSelected,
+                    ]}
+                    onPress={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        saleType: saleType.value,
+                      }))
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        filters.saleType === saleType.value &&
+                          styles.filterOptionTextSelected,
+                      ]}
+                    >
+                      {saleType.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           </ScrollView>
 
           <View style={styles.filterActions}>
@@ -874,6 +979,7 @@ export default function SaleScreen({ navigation }) {
                   status: "all",
                   dateRange: "today",
                   paymentMethod: "all",
+                  saleType: "all",
                   minAmount: "",
                   maxAmount: "",
                 })
@@ -1045,7 +1151,7 @@ export default function SaleScreen({ navigation }) {
               <View style={styles.historyIconContainer}>
                 <Ionicons name="time-outline" size={28} color="#7b2ff7" />
               </View>
-              <Text style={styles.historyButtonText}>histórico</Text>
+              <Text style={styles.historyButtonText}>Filtrar</Text>
             </TouchableOpacity>
           </View>
 
@@ -1300,6 +1406,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
+ 
   pedidoCard: {
     flex: 1,
     backgroundColor: "#fff",
@@ -1321,6 +1428,58 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: "#4CAF50",
   },
+  pedidoDelivery: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B35",
+  },
+  pedidoHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start", // Alinhar no topo
+    marginBottom: 8,
+  },
+  pedidoTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    flexWrap: "wrap",
+  },
+  pedidoNumero: {
+    fontSize: 14, // Aumentado de 12 para 14
+    fontWeight: "bold",
+    color: "#333", // Mudado de #666 para #333 para melhor contraste
+    marginRight: 8,
+  },
+  deliveryBadge: {
+    backgroundColor: "#FF6B35",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  deliveryBadgeText: {
+    fontSize: 8, // Reduzido para caber melhor
+    fontWeight: "bold",
+    color: "#fff",
+    marginLeft: 2,
+  },
+  pedidoCliente: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  pedidoValor: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#7b2ff7",
+    marginBottom: 4,
+  },
+  pedidoData: {
+    fontSize: 10,
+    color: "#999",
+  },
   pedidoCardVazio: {
     flex: 1,
     marginHorizontal: 4,
@@ -1330,6 +1489,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
+    paddingRight: 40, // Adicione esta linha para criar espaço para os badges
   },
   pedidoNumero: {
     fontSize: 12,
@@ -1352,19 +1512,27 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#999",
   },
-  pedidoBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "#FFF3CD",
+  pedidoTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  deliveryBadge: {
+    backgroundColor: "#FF6B35",
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
+    marginLeft: 8,
   },
-  pedidoBadgeText: {
+
+  deliveryBadgeText: {
     fontSize: 10,
     fontWeight: "bold",
-    color: "#856404",
+    color: "#fff",
+    marginLeft: 2,
   },
   emptyState: {
     alignItems: "center",

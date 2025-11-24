@@ -8,17 +8,19 @@ import {
   TextInput,
   Alert,
   Modal,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../../context/AuthContext"; // ← Import do contexto
-import api from "../../services/api"; // ← Import da API configurada
+import { useAuth } from "../../context/AuthContext";
+import api from "../../services/api";
 
 export default function NovaDeliveryScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
+  const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [clienteId, setClienteId] = useState(null);
   const [endereco, setEndereco] = useState({
     rua: "",
@@ -29,6 +31,12 @@ export default function NovaDeliveryScreen({ navigation }) {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showClientesModal, setShowClientesModal] = useState(false);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
+  
+  // Estados para busca e filtro
+  const [termoBusca, setTermoBusca] = useState('');
+  const [grupoSelecionado, setGrupoSelecionado] = useState('todos');
+  const [grupos, setGrupos] = useState([]);
+  const [gruposCarregados, setGruposCarregados] = useState([]);
 
   // ✅ Usar o contexto de autenticação
   const { user, token, isAuthenticated } = useAuth();
@@ -44,7 +52,38 @@ export default function NovaDeliveryScreen({ navigation }) {
     console.log("✅ Usuário autenticado para delivery:", user?.name);
     carregarClientes();
     carregarProdutos();
+    carregarGrupos();
   }, [isAuthenticated]);
+
+  // ✅ NOVA FUNÇÃO: Carregar grupos da API
+  const carregarGrupos = async () => {
+    try {
+      console.log("📂 Carregando grupos de produtos para delivery...");
+      const response = await api.get("/product_groups");
+      
+      if (response.data) {
+        const data = response.data;
+        let gruposData = [];
+        
+        // Diferentes formatos que a API pode retornar
+        if (Array.isArray(data)) {
+          gruposData = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          gruposData = data.data;
+        } else if (data.product_groups && Array.isArray(data.product_groups)) {
+          gruposData = data.product_groups;
+        } else if (data.groups && Array.isArray(data.groups)) {
+          gruposData = data.groups;
+        }
+        
+        console.log(`✅ ${gruposData.length} grupos carregados para delivery`);
+        setGruposCarregados(gruposData);
+      }
+    } catch (error) {
+      console.error("❌ Erro ao carregar grupos:", error.response?.data || error.message);
+      setGruposCarregados([]);
+    }
+  };
 
   const carregarClientes = async () => {
     try {
@@ -72,12 +111,84 @@ export default function NovaDeliveryScreen({ navigation }) {
         const data = response.data;
         const produtosData = Array.isArray(data) ? data : data.products || data.data || [];
         setProdutosDisponiveis(produtosData);
+        setProdutosFiltrados(produtosData);
         console.log(`✅ ${produtosData.length} produtos carregados para delivery`);
       }
     } catch (error) {
       console.error("❌ Erro ao carregar produtos:", error.response?.data || error.message);
       Alert.alert("Erro", "Não foi possível carregar a lista de produtos");
     }
+  };
+
+  // ✅ FUNÇÃO: Encontrar nome do grupo
+  const encontrarNomeGrupo = (groupId) => {
+    if (!groupId) return 'Sem Grupo';
+    
+    const grupo = gruposCarregados.find(g => g.id === groupId);
+    return grupo ? grupo.name || grupo.nome || `Grupo ${groupId}` : `Grupo ${groupId}`;
+  };
+
+  // ✅ FUNÇÃO: Extrair grupos únicos dos produtos
+  const extrairGruposDosProdutos = (produtosData, gruposAPI) => {
+    const gruposUnicos = [...new Map(produtosData
+      .filter(p => p.group_id || p.grupo_id)
+      .map(p => {
+        const grupoId = p.group_id || p.grupo_id;
+        const grupoNome = encontrarNomeGrupo(grupoId);
+        return [grupoId, { id: grupoId, nome: grupoNome }];
+      })).values()];
+    
+    // Adicionar opção "Todos" no início
+    const gruposComTodos = [
+      { id: 'todos', nome: 'Todos' },
+      ...gruposUnicos
+    ];
+    
+    console.log(`📂 ${gruposUnicos.length} grupos encontrados nos produtos`);
+    return gruposComTodos;
+  };
+
+  // ✅ useEffect: Processar grupos quando dados carregarem
+  useEffect(() => {
+    if (gruposCarregados.length > 0 && produtosDisponiveis.length > 0) {
+      console.log("🔄 Processando grupos dos produtos para delivery...");
+      const gruposProcessados = extrairGruposDosProdutos(produtosDisponiveis, gruposCarregados);
+      setGrupos(gruposProcessados);
+    }
+  }, [gruposCarregados, produtosDisponiveis]);
+
+  // Função para buscar produtos
+  const handleBusca = (texto) => {
+    setTermoBusca(texto);
+    filtrarProdutos(texto, grupoSelecionado);
+  };
+
+  // Função para filtrar por grupo
+  const handleFiltroGrupo = (grupoId) => {
+    setGrupoSelecionado(grupoId);
+    filtrarProdutos(termoBusca, grupoId);
+  };
+
+  // ✅ FUNÇÃO: Filtrar produtos
+  const filtrarProdutos = (busca, grupoId) => {
+    let filtrados = [...produtosDisponiveis];
+
+    // Filtro por busca
+    if (busca) {
+      filtrados = filtrados.filter(produto =>
+        produto.name?.toLowerCase().includes(busca.toLowerCase()) ||
+        produto.nome?.toLowerCase().includes(busca.toLowerCase())
+      );
+    }
+
+    // Filtro por grupo
+    if (grupoId !== 'todos') {
+      filtrados = filtrados.filter(produto => 
+        produto.group_id === grupoId || produto.grupo_id === grupoId
+      );
+    }
+
+    setProdutosFiltrados(filtrados);
   };
 
   const adicionarProduto = (produto) => {
@@ -101,7 +212,7 @@ export default function NovaDeliveryScreen({ navigation }) {
         nome: produto.name || produto.nome || "Produto sem nome",
         preco: parseFloat(produto.price) || 0,
         quantidade: 1,
-        subtotal: parseFloat(produto.price) || 0
+        subtotal: parseFloat(produto.price) || 0,
       }]);
     }
     setShowProdutosModal(false);
@@ -129,19 +240,10 @@ export default function NovaDeliveryScreen({ navigation }) {
     return produtos.reduce((total, produto) => total + (produto.subtotal || 0), 0);
   };
 
+  // ✅ ATUALIZADO: Agora cria como "pending" igual às vendas locais
   const finalizarDelivery = async () => {
     if (produtos.length === 0) {
       Alert.alert("Atenção", "Adicione pelo menos um produto para finalizar o delivery.");
-      return;
-    }
-
-    if (!clienteId) {
-      Alert.alert("Atenção", "Selecione um cliente para o delivery.");
-      return;
-    }
-
-    if (!endereco.rua || !endereco.numero) {
-      Alert.alert("Atenção", "Informe o endereço de entrega completo.");
       return;
     }
 
@@ -152,58 +254,31 @@ export default function NovaDeliveryScreen({ navigation }) {
 
     setLoading(true);
     try {
-      console.log("🚀 Iniciando processo de delivery para usuário:", user.id);
+      console.log("🚀 Criando delivery pendente para usuário:", user.id);
 
-      // ✅ 1. Primeiro criar o order (sem mesa)
+      // ✅ 1. Criar o order (sem mesa)
       const orderData = {
         notes: observacoes,
         status: 'open'
       };
 
       console.log("📋 Criando order para delivery:", orderData);
-
       const orderResponse = await api.post("/order", orderData);
-
-      if (orderResponse.data) {
-        console.log("✅ Order criada para delivery:", orderResponse.data);
-      }
-
-      // ✅ CORREÇÃO: A API retorna orderId (com I maiúsculo)
       const orderId = orderResponse.data.orderId || orderResponse.data.id || orderResponse.data.order_id;
       
       if (!orderId) {
-        console.log("❌ Estrutura completa da resposta:", JSON.stringify(orderResponse.data, null, 2));
         throw new Error("ID do pedido não retornado pela API");
       }
 
       console.log("🎯 Order ID obtido para delivery:", orderId);
 
-      // ✅ 2. Atualizar endereço do cliente se necessário
-      const cliente = clientes.find(c => c.id === clienteId);
-      if (cliente && (!cliente.address_street || !cliente.address_number)) {
-        console.log("🏠 Atualizando endereço do cliente:", cliente.name);
-        
-        try {
-          await api.put(`/customers/${clienteId}`, {
-            address_street: endereco.rua,
-            address_number: endereco.numero,
-            address_notes: endereco.complemento
-          });
-          console.log("✅ Endereço do cliente atualizado");
-        } catch (updateError) {
-          console.warn("⚠️ Não foi possível atualizar endereço do cliente:", updateError.message);
-          // Não impede a venda se falhar a atualização do endereço
-        }
-      }
-
-      // ✅ 3. Criar a sale - O user_id VEM DO TOKEN (não precisa enviar)
+      // ✅ 2. Criar a sale com status 'pending' (não finalizada ainda)
       const saleData = {
         order_id: orderId,
-        customer_id: clienteId,
+        customer_id: clienteId || null,
         total_amount: calcularTotal(),
         payment_method: paymentMethod,
-        status: 'pending', // Delivery fica como pending até ser entregue
-        // ❌ NÃO enviar user_id - ele vem do token via middleware
+        status: 'pending', // ← AGORA FICA COMO PENDENTE IGUAL ÀS VENDAS
         items: produtos.map(produto => ({
           product_id: produto.id,
           quantity: produto.quantidade,
@@ -212,30 +287,37 @@ export default function NovaDeliveryScreen({ navigation }) {
         }))
       };
 
-      console.log("💰 Criando sale para delivery:", saleData);
-      console.log("👤 User ID (vindo do token):", user.id);
-
-      // ✅ 4. Criar a venda usando a API configurada (já com token)
+      console.log("💰 Criando sale PENDENTE para delivery:", saleData);
       const saleResponse = await api.post("/sales", saleData);
 
-      console.log("✅ Delivery criado com sucesso:", saleResponse.data);
+      console.log("✅ Delivery pendente criado com sucesso:", saleResponse.data);
 
       Alert.alert(
-        "Sucesso", 
-        "Delivery realizado com sucesso!", 
+        "Delivery Aberto", 
+        "Delivery iniciado com sucesso! Agora ele aparece nos Pedidos em Andamento.",
         [
           { 
-            text: "OK", 
-            onPress: () => navigation.goBack() 
+            text: "Continuar", 
+            onPress: () => {
+              // Limpar o formulário para novo delivery
+              setProdutos([]);
+              setEndereco({ rua: "", numero: "", complemento: "" });
+              setObservacoes("");
+              setClienteId(null);
+            }
+          },
+          { 
+            text: "Ver Pedidos", 
+            onPress: () => navigation.navigate('Vendas')
           }
         ]
       );
       
     } catch (error) {
-      console.error("❌ Erro completo no delivery:", error);
+      console.error("❌ Erro ao criar delivery pendente:", error);
       console.error("❌ Detalhes do erro:", error.response?.data);
       
-      let errorMessage = "Não foi possível finalizar o delivery.";
+      let errorMessage = "Não foi possível iniciar o delivery.";
       
       if (error.response?.status === 401) {
         errorMessage = "Sessão expirada. Faça login novamente.";
@@ -274,13 +356,13 @@ export default function NovaDeliveryScreen({ navigation }) {
 
         {/* Seção Cliente */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cliente *</Text>
+          <Text style={styles.sectionTitle}>Cliente</Text>
           <TouchableOpacity 
             style={styles.selectButton}
             onPress={() => setShowClientesModal(true)}
           >
             <Text style={clienteSelecionado ? styles.selectButtonText : styles.selectButtonPlaceholder}>
-              {clienteSelecionado ? clienteSelecionado.name || clienteSelecionado.nome : "Selecionar cliente"}
+              {clienteSelecionado ? clienteSelecionado.name || clienteSelecionado.nome : "Selecionar cliente (opcional)"}
             </Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
@@ -288,17 +370,17 @@ export default function NovaDeliveryScreen({ navigation }) {
 
         {/* Seção Endereço */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Endereço de Entrega *</Text>
+          <Text style={styles.sectionTitle}>Endereço de Entrega</Text>
           <TextInput
             style={styles.input}
-            placeholder="Rua"
+            placeholder="Rua (opcional)"
             value={endereco.rua}
             onChangeText={(text) => setEndereco({...endereco, rua: text})}
           />
           <View style={styles.enderecoRow}>
             <TextInput
               style={[styles.input, { flex: 1, marginRight: 10 }]}
-              placeholder="Número"
+              placeholder="Número (opcional)"
               value={endereco.numero}
               onChangeText={(text) => setEndereco({...endereco, numero: text})}
             />
@@ -314,7 +396,7 @@ export default function NovaDeliveryScreen({ navigation }) {
         {/* Seção Produtos */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Produtos *</Text>
+            <Text style={styles.sectionTitle}>Produtos</Text>
             <TouchableOpacity 
               style={styles.addButton}
               onPress={() => setShowProdutosModal(true)}
@@ -475,56 +557,120 @@ export default function NovaDeliveryScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Modal de Produtos */}
+      {/* ✅ Modal de Produtos ATUALIZADO com Grupos */}
       <Modal
         visible={showProdutosModal}
         transparent={true}
         animationType="slide"
+        onRequestClose={() => setShowProdutosModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Produto</Text>
-              <TouchableOpacity onPress={() => setShowProdutosModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              {produtosDisponiveis.length === 0 ? (
-                <Text style={styles.emptyModalText}>Nenhum produto disponível</Text>
-              ) : (
-                produtosDisponiveis.map(produto => (
-                  <TouchableOpacity
-                    key={produto.id}
-                    style={styles.produtoModalItem}
-                    onPress={() => adicionarProduto(produto)}
-                  >
-                    <View style={styles.produtoModalInfo}>
-                      <Text style={styles.produtoModalNome}>
-                        {produto.name || produto.nome}
-                      </Text>
-                      <Text style={styles.produtoModalPreco}>
-                        R$ {parseFloat(produto.price || 0).toFixed(2)}
-                      </Text>
-                    </View>
-                    <Ionicons name="add-circle" size={24} color="#7b2ff7" />
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Selecionar Produto</Text>
+            <TouchableOpacity onPress={() => setShowProdutosModal(false)}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          {/* Barra de Pesquisa */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar produtos..."
+              value={termoBusca}
+              onChangeText={handleBusca}
+              placeholderTextColor="#999"
+            />
+            {termoBusca ? (
+              <TouchableOpacity onPress={() => handleBusca('')}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* Filtro por Grupos */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.gruposContainer}
+          >
+            {grupos.map(grupo => {
+              const produtosNoGrupo = grupo.id === 'todos' 
+                ? produtosDisponiveis 
+                : produtosDisponiveis.filter(p => 
+                    p.group_id === grupo.id || p.grupo_id === grupo.id
+                  );
+              
+              return (
+                <TouchableOpacity
+                  key={grupo.id}
+                  style={[
+                    styles.grupoItem,
+                    grupoSelecionado === grupo.id && styles.grupoItemSelecionado
+                  ]}
+                  onPress={() => handleFiltroGrupo(grupo.id)}
+                >
+                  <Text style={[
+                    styles.grupoText,
+                    grupoSelecionado === grupo.id && styles.grupoTextSelecionado
+                  ]}>
+                    {grupo.nome} ({produtosNoGrupo.length})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Lista de Produtos Filtrados */}
+          <FlatList
+            data={produtosFiltrados}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.produtosList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.produtoItemModal}
+                onPress={() => adicionarProduto(item)}
+              >
+                <View style={styles.produtoInfoModal}>
+                  <Text style={styles.produtoNomeModal}>
+                    {item.name || item.nome}
+                  </Text>
+                  <Text style={styles.produtoPrecoModal}>
+                    R$ {parseFloat(item.price || item.preco || 0).toFixed(2)}
+                  </Text>
+                  {/* ✅ Mostra o nome do grupo */}
+                  <Text style={styles.produtoGrupoModal}>
+                    {encontrarNomeGrupo(item.group_id || item.grupo_id)}
+                  </Text>
+                </View>
+                <Ionicons name="add-circle" size={24} color="#7b2ff7" />
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyStateText}>
+                  Nenhum produto encontrado
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {termoBusca ? 'Tente alterar os termos da busca' : 'Nenhum produto disponível'}
+                </Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS PARA DELIVERY
+// ✅ ESTILOS ATUALIZADOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f9f4fc",
-    marginBottom: 120,
   },
   header: {
     flexDirection: "row",
@@ -747,6 +893,7 @@ const styles = StyleSheet.create({
     color: "#7b2ff7",
   },
   footer: {
+    marginBottom:120,
     padding: 20,
     backgroundColor: "#fff",
     borderTopWidth: 1,
@@ -770,6 +917,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
   },
   modalContent: {
     backgroundColor: '#fff',
@@ -816,25 +967,105 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
-  produtoModalItem: {
+  // ✅ NOVOS ESTILOS PARA GRUPOS E BUSCA
+  searchContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#f5f5f5',
+    margin: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  produtoModalInfo: {
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
     flex: 1,
-  },
-  produtoModalNome: {
     fontSize: 16,
-    fontWeight: '500',
     color: '#333',
   },
-  produtoModalPreco: {
+  gruposContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    maxHeight: 50,
+  },
+  grupoItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  grupoItemSelecionado: {
+    backgroundColor: '#7b2ff7',
+    borderColor: '#7b2ff7',
+  },
+  grupoText: {
     fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  grupoTextSelecionado: {
+    color: '#fff',
+  },
+  produtosList: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  produtoItemModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  produtoInfoModal: {
+    flex: 1,
+  },
+  produtoNomeModal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  produtoPrecoModal: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#7b2ff7',
+    marginBottom: 2,
+  },
+  produtoGrupoModal: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    marginTop: 10,
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
     marginTop: 4,
   },
 });

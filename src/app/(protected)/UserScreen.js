@@ -134,7 +134,7 @@ export default function UserScreen({ navigation }) {
   };
 
   const handleContactSupport = () => {
-    Linking.openURL(`mailto:suporte@ordernote.com?subject=Suporte - ${user?.name || "Usuário"}`);
+    Linking.openURL(`mailto:webtechteamoficial@gmail.com?subject=Suporte - ${user?.name || "Usuário"}`);
   };
 
   const handleOpenFAQ = () => {
@@ -484,7 +484,7 @@ export default function UserScreen({ navigation }) {
                 </View>
                 <View style={styles.contactItem}>
                   <Ionicons name="mail" size={16} color="#666" />
-                  <Text style={styles.contactText}>suporte@ordernote.com</Text>
+                  <Text style={styles.contactText}>webtechteamoficial@gmail.com</Text>
                 </View>
               </View>
 
