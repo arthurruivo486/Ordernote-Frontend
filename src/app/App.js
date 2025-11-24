@@ -15,7 +15,7 @@ import NovaVendaScreen from './(protected)/NovaVendaScreen';
 import NovaDeliveryScreen from './(protected)/NovaDeliveryScreen';
 import EditarVendaScreen from './(protected)/EditarVendaScreen';
 import LoginScreen from './LoginScreen';
-import NovoProdutoScreen from './screens/NovoProdutoScreen';
+import NovoProdutoScreen from './(protected)/NovoProdutoScreen';
 
 const Tab = createBottomTabNavigator();
 const SaleStack = createNativeStackNavigator();
@@ -29,7 +29,7 @@ function SaleStackNavigator() {
       <SaleStack.Screen name="NovaVenda" component={NovaVendaScreen} />
       <SaleStack.Screen name="NovaDelivery" component={NovaDeliveryScreen} />
       <SaleStack.Screen name="EditarVenda" component={EditarVendaScreen} />
-      <ProductStack.Screen name="NovoProduto" component={NovoProdutoScreen} />
+      <SaleStack.Screen name="NovoProduto" component={NovoProdutoScreen} />
     </SaleStack.Navigator>
   );
 }
