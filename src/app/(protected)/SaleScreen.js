@@ -15,8 +15,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import XLSX from "xlsx";
+
 
 export default function SaleScreen({ navigation }) {
+  const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sales, setSales] = useState([]);
@@ -25,45 +30,33 @@ export default function SaleScreen({ navigation }) {
   const [selectedSale, setSelectedSale] = useState(null);
   const [showSaleDetails, setShowSaleDetails] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  // Estados para filtros
   const [filters, setFilters] = useState({
-    status: 'all',
-    dateRange: 'today',
-    paymentMethod: 'all',
-    minAmount: '',
-    maxAmount: ''
+    status: "all",
+    dateRange: "today",
+    paymentMethod: "all",
+    minAmount: "",
+    maxAmount: "",
   });
 
   const { user, token, isAuthenticated } = useAuth();
 
   const [saleTypes] = useState([
     {
-      id: 'local',
-      name: 'Venda Local',
-      description: 'Venda para consumo no local',
-      icon: 'storefront-outline',
-      color: '#7b2ff7'
+      id: "local",
+      name: "Venda Local",
+      description: "Venda para consumo no local",
+      icon: "storefront-outline",
+      color: "#7b2ff7",
     },
     {
-      id: 'delivery',
-      name: 'Delivery',
-      description: 'Entrega no endereço do cliente',
-      icon: 'bicycle-outline',
-      color: '#FF6B35'
+      id: "delivery",
+      name: "Delivery",
+      description: "Entrega no endereço do cliente",
+      icon: "bicycle-outline",
+      color: "#FF6B35",
     },
-    {
-      id: 'takeaway',
-      name: 'Takeaway',
-      description: 'Cliente retira no local',
-      icon: 'bag-handle-outline',
-      color: '#4CAF50'
-    },
-    {
-      id: 'reservation',
-      name: 'Reserva',
-      description: 'Reserva para data futura',
-      icon: 'calendar-outline',
-      color: '#FFA500'
-    }
   ]);
 
   // Busca vendas e clientes
@@ -79,7 +72,7 @@ export default function SaleScreen({ navigation }) {
       console.log("📊 Carregando vendas para usuário:", user?.id);
 
       const salesResponse = await api.get("/sales");
-      
+
       let salesArray = [];
       const salesData = salesResponse.data;
 
@@ -93,7 +86,7 @@ export default function SaleScreen({ navigation }) {
       }
 
       const custResponse = await api.get("/customers");
-      
+
       const cmap = {};
       const custData = custResponse.data;
       const customersArray = Array.isArray(custData)
@@ -111,7 +104,7 @@ export default function SaleScreen({ navigation }) {
       });
 
       const userSales = Array.isArray(salesArray)
-        ? salesArray.filter(sale => {
+        ? salesArray.filter((sale) => {
             if (sale.user_id) {
               return sale.user_id === user.id;
             }
@@ -125,15 +118,17 @@ export default function SaleScreen({ navigation }) {
         return tb - ta;
       });
 
-      console.log(`✅ ${sortedSales.length} vendas carregadas para o usuário ${user.id}`);
-      
+      console.log(
+        `✅ ${sortedSales.length} vendas carregadas para o usuário ${user.id}`
+      );
+
       setSales(sortedSales);
       setCustomersMap(cmap);
     } catch (error) {
       console.error("❌ Erro ao carregar vendas:", error);
-      
+
       let errorMessage = "Não foi possível carregar as vendas";
-      
+
       if (error.response?.status === 401) {
         errorMessage = "Sessão expirada. Faça login novamente.";
       } else if (error.response?.data?.message) {
@@ -141,7 +136,7 @@ export default function SaleScreen({ navigation }) {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       Alert.alert("Erro", errorMessage);
     } finally {
       setLoading(false);
@@ -172,23 +167,29 @@ export default function SaleScreen({ navigation }) {
     let filteredSales = sales;
 
     // Filtro por status
-    if (filters.status !== 'all') {
-      filteredSales = filteredSales.filter(sale => sale.status === filters.status);
+    if (filters.status !== "all") {
+      filteredSales = filteredSales.filter(
+        (sale) => sale.status === filters.status
+      );
     }
 
     // Filtro por data
-    if (filters.dateRange !== 'all') {
+    if (filters.dateRange !== "all") {
       const today = new Date();
-      filteredSales = filteredSales.filter(sale => {
+      filteredSales = filteredSales.filter((sale) => {
         const saleDate = new Date(sale.created_at);
-        switch(filters.dateRange) {
-          case 'today':
+        switch (filters.dateRange) {
+          case "today":
             return saleDate.toDateString() === today.toDateString();
-          case 'week':
+          case "week":
             const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
             return saleDate >= weekAgo;
-          case 'month':
-            const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+          case "month":
+            const monthAgo = new Date(
+              today.getFullYear(),
+              today.getMonth() - 1,
+              today.getDate()
+            );
             return saleDate >= monthAgo;
           default:
             return true;
@@ -197,16 +198,22 @@ export default function SaleScreen({ navigation }) {
     }
 
     // Filtro por método de pagamento
-    if (filters.paymentMethod !== 'all') {
-      filteredSales = filteredSales.filter(sale => sale.payment_method === filters.paymentMethod);
+    if (filters.paymentMethod !== "all") {
+      filteredSales = filteredSales.filter(
+        (sale) => sale.payment_method === filters.paymentMethod
+      );
     }
 
     // Filtro por valor
     if (filters.minAmount) {
-      filteredSales = filteredSales.filter(sale => sale.total_amount >= parseFloat(filters.minAmount));
+      filteredSales = filteredSales.filter(
+        (sale) => sale.total_amount >= parseFloat(filters.minAmount)
+      );
     }
     if (filters.maxAmount) {
-      filteredSales = filteredSales.filter(sale => sale.total_amount <= parseFloat(filters.maxAmount));
+      filteredSales = filteredSales.filter(
+        (sale) => sale.total_amount <= parseFloat(filters.maxAmount)
+      );
     }
 
     return filteredSales;
@@ -214,39 +221,49 @@ export default function SaleScreen({ navigation }) {
 
   const filteredSales = applyFilters();
 
-  // Separar pedidos por status
-  const pedidosEmAndamento = filteredSales.filter(sale => 
-    sale.status === 'pending' || sale.status === 'processing' || !sale.status
-  ).slice(0, 6);
+  // Separar pedidos por status (usando vendas filtradas)
+  const pedidosEmAndamento = filteredSales
+    .filter(
+      (sale) =>
+        sale.status === "pending" ||
+        sale.status === "processing" ||
+        !sale.status
+    )
+    .slice(0, 6);
 
-  const pedidosFinalizados = filteredSales.filter(sale => 
-    sale.status === 'paid' || sale.status === 'completed' || sale.status === 'delivered'
-  ).slice(0, 6);
+  const pedidosFinalizados = filteredSales
+    .filter(
+      (sale) =>
+        sale.status === "paid" ||
+        sale.status === "completed" ||
+        sale.status === "delivered"
+    )
+    .slice(0, 6);
 
   // Função para finalizar uma venda pendente
   const finalizarVendaPendente = async (sale) => {
     try {
       console.log("💰 Finalizando venda:", sale.id);
-      
+
       const updateData = {
-        status: 'paid',
-        payment_method: sale.payment_method || 'cash'
+        status: "paid",
+        payment_method: sale.payment_method || "cash",
       };
 
       const response = await api.patch(`/sales/${sale.id}`, updateData);
-      
+
       if (response.data) {
         console.log("✅ Venda finalizada com sucesso:", response.data);
-        
+
         // Atualizar a lista local
-        setSales(prevSales => 
-          prevSales.map(s => 
-            s.id === sale.id 
-              ? { ...s, status: 'paid', updated_at: new Date().toISOString() }
+        setSales((prevSales) =>
+          prevSales.map((s) =>
+            s.id === sale.id
+              ? { ...s, status: "paid", updated_at: new Date().toISOString() }
               : s
           )
         );
-        
+
         setShowSaleDetails(false);
         Alert.alert("Sucesso", "Venda finalizada com sucesso!");
       }
@@ -261,7 +278,7 @@ export default function SaleScreen({ navigation }) {
     setSelectedSale(sale);
     setShowSaleDetails(false);
     // Navegar para tela de edição (podemos reutilizar a NovaVendaScreen com dados)
-    navigation.navigate('EditarVenda', { sale });
+    navigation.navigate("EditarVenda", { sale });
   };
 
   // Função para visualizar detalhes da venda
@@ -273,22 +290,176 @@ export default function SaleScreen({ navigation }) {
   // Função para lidar com a seleção do tipo de venda
   const handleSaleTypeSelect = (saleType) => {
     setShowSaleTypeModal(false);
-    
-    switch(saleType.id) {
-      case 'local':
-        navigation.navigate('NovaVenda', { saleType: 'local' });
+
+    switch (saleType.id) {
+      case "local":
+        navigation.navigate("NovaVenda", { saleType: "local" });
         break;
-      case 'delivery':
-        navigation.navigate('NovaDelivery', { saleType: 'delivery' });
-        break;
-      case 'takeaway':
-        navigation.navigate('NovaVenda', { saleType: 'takeaway' });
-        break;
-      case 'reservation':
-        navigation.navigate('NovaReserva', { saleType: 'reservation' });
+      case "delivery":
+        navigation.navigate("NovaDelivery", { saleType: "delivery" });
         break;
       default:
-        navigation.navigate('NovaVenda', { saleType: 'local' });
+        // Fallback para venda local caso haja algum problema
+        navigation.navigate("NovaVenda", { saleType: "local" });
+    }
+  };
+
+  // FUNÇÃO PARA GERAR RELATÓRIO XLSX
+  const gerarRelatorio = async (tipo) => {
+    try {
+      setModalVisible(false);
+      Alert.alert("Gerando Relatório", "Aguarde...");
+
+      if (!sales || sales.length === 0) {
+        Alert.alert("Aviso", "Nenhuma venda registrada.");
+        return;
+      }
+
+      // --------------------------
+      // DEFINIÇÃO DO PERÍODO
+      // --------------------------
+      const hoje = new Date();
+      let startDate = new Date(0);
+      let endDate = new Date();
+
+      switch (tipo) {
+        case "dia":
+          startDate = new Date(hoje);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(hoje);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+
+        case "semana":
+          startDate = new Date(hoje);
+          startDate.setDate(hoje.getDate() - 7);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(hoje);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+
+        case "mes":
+          startDate = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+      }
+
+      // --------------------------
+      // FILTRAGEM DAS VENDAS
+      // --------------------------
+      const vendasFiltradas = sales.filter((v) => {
+        if (!v.created_at) return false;
+        const data = new Date(v.created_at);
+        return data >= startDate && data <= endDate;
+      });
+
+      if (vendasFiltradas.length === 0) {
+        Alert.alert(
+          "Aviso",
+          "Nenhuma venda encontrada no período selecionado."
+        );
+        return;
+      }
+
+      // --------------------------
+      // TOTALIZAÇÃO
+      // --------------------------
+      const total = vendasFiltradas.reduce(
+        (acc, v) => acc + Number(v.total_amount || 0),
+        0
+      );
+
+      // --------------------------
+      // MONTAGEM DA PLANILHA
+      // --------------------------
+      const dados = vendasFiltradas.map((v) => {
+        const customer = customersMap?.[v.customer_id] || null;
+
+        const nomeCliente = customer
+          ? customer.name
+          : v.customer_id
+          ? `Cliente #${v.customer_id}`
+          : "Venda Local";
+
+        return {
+          ID: v.id ?? "-",
+          Data: v.created_at
+            ? new Date(v.created_at).toLocaleString("pt-BR")
+            : "N/A",
+          Cliente: nomeCliente,
+          Status:
+            v.status === "paid"
+              ? "Pago"
+              : v.status === "pending"
+              ? "Pendente"
+              : v.status === "cancelled"
+              ? "Cancelado"
+              : "Outro",
+          "Método Pagamento":
+            v.payment_method === "cash"
+              ? "Dinheiro"
+              : v.payment_method === "card"
+              ? "Cartão"
+              : v.payment_method === "pix"
+              ? "PIX"
+              : "Outro",
+          Valor: Number(v.total_amount || 0),
+        };
+      });
+
+      // Linha final com TOTAL
+      dados.push({
+        ID: "",
+        Data: "",
+        Cliente: "TOTAL",
+        Status: "",
+        "Método Pagamento": "",
+        Valor: total,
+      });
+
+      // --------------------------
+      // CRIAÇÃO DA PLANILHA XLSX
+      // --------------------------
+      const ws = XLSX.utils.json_to_sheet(dados);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Relatório");
+
+      const wbout = XLSX.write(wb, {
+        type: "base64",
+        bookType: "xlsx",
+      });
+
+      // --------------------------
+      // SALVANDO O ARQUIVO
+      // --------------------------
+      const fileName = `relatorio_vendas_${tipo}_${
+        new Date().toISOString().split("T")[0]
+      }.xlsx`;
+
+      const path = FileSystem.documentDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(path, wbout, {
+        encoding: "base64", // <- CORRETO E COMPATÍVEL EM TODAS VERSÕES
+      });
+
+      // --------------------------
+      // COMPARTILHAR O ARQUIVO
+      // --------------------------
+      await Sharing.shareAsync(path, {
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        dialogTitle: "Salvar Relatório de Vendas",
+      });
+
+      Alert.alert("Sucesso!", "Relatório gerado com sucesso!");
+    } catch (error) {
+      console.log("Erro ao gerar relatório:", error);
+      Alert.alert(
+        "Erro",
+        "Ocorreu um problema ao gerar o relatório. Tente novamente."
+      );
     }
   };
 
@@ -319,30 +490,38 @@ export default function SaleScreen({ navigation }) {
     const rows = [];
     for (let i = 0; i < pedidos.length; i += 3) {
       const rowPedidos = pedidos.slice(i, i + 3);
-      
+
       rows.push(
         <View key={i} style={styles.pedidosRow}>
           {rowPedidos.map((pedido) => {
             const pedidoCustomer = customersMap[pedido.customer_id] || null;
             const pedidoClientName = pedidoCustomer
               ? pedidoCustomer.name
-              : pedido.customer_id ? `Cliente #${pedido.customer_id}` : "Venda Local";
+              : pedido.customer_id
+              ? `Cliente #${pedido.customer_id}`
+              : "Venda Local";
 
             return (
-              <TouchableOpacity 
-                key={pedido.id} 
+              <TouchableOpacity
+                key={pedido.id}
                 style={[
                   styles.pedidoCard,
-                  tipo === 'andamento' ? styles.pedidoAndamento : styles.pedidoFinalizado
+                  tipo === "andamento"
+                    ? styles.pedidoAndamento
+                    : styles.pedidoFinalizado,
                 ]}
                 onPress={() => verDetalhesVenda(pedido)}
               >
                 <View style={styles.pedidoHeader}>
                   <Text style={styles.pedidoNumero}>#{pedido.id}</Text>
-                  <Ionicons 
-                    name={tipo === 'andamento' ? "time-outline" : "checkmark-circle-outline"} 
-                    size={16} 
-                    color={tipo === 'andamento' ? "#FFA500" : "#4CAF50"} 
+                  <Ionicons
+                    name={
+                      tipo === "andamento"
+                        ? "time-outline"
+                        : "checkmark-circle-outline"
+                    }
+                    size={16}
+                    color={tipo === "andamento" ? "#FFA500" : "#4CAF50"}
                   />
                 </View>
                 <Text style={styles.pedidoCliente} numberOfLines={1}>
@@ -352,9 +531,11 @@ export default function SaleScreen({ navigation }) {
                   {formatBRL(pedido.total_amount)}
                 </Text>
                 <Text style={styles.pedidoData}>
-                  {pedido.created_at ? new Date(pedido.created_at).toLocaleDateString('pt-BR') : 'Data não disponível'}
+                  {pedido.created_at
+                    ? new Date(pedido.created_at).toLocaleDateString("pt-BR")
+                    : "Data não disponível"}
                 </Text>
-                {tipo === 'andamento' && (
+                {tipo === "andamento" && (
                   <View style={styles.pedidoBadge}>
                     <Text style={styles.pedidoBadgeText}>PENDENTE</Text>
                   </View>
@@ -362,11 +543,15 @@ export default function SaleScreen({ navigation }) {
               </TouchableOpacity>
             );
           })}
-          {rowPedidos.length < 3 && 
-            Array.from({ length: 3 - rowPedidos.length }).map((_, emptyIndex) => (
-              <View key={`empty-${emptyIndex}`} style={styles.pedidoCardVazio} />
-            ))
-          }
+          {rowPedidos.length < 3 &&
+            Array.from({ length: 3 - rowPedidos.length }).map(
+              (_, emptyIndex) => (
+                <View
+                  key={`empty-${emptyIndex}`}
+                  style={styles.pedidoCardVazio}
+                />
+              )
+            )}
         </View>
       );
     }
@@ -385,38 +570,36 @@ export default function SaleScreen({ navigation }) {
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Selecione o tipo de venda</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowSaleTypeModal(false)}
               style={styles.closeButton}
             >
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color="#333" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.saleTypesContainer}>
             {saleTypes.map((type) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 key={type.id}
                 style={[styles.saleTypeButton, { borderLeftColor: type.color }]}
                 onPress={() => handleSaleTypeSelect(type)}
               >
                 <View style={styles.saleTypeIconContainer}>
-                  <Ionicons 
-                    name={type.icon} 
-                    size={28} 
-                    color={type.color} 
-                  />
+                  <Ionicons name={type.icon} size={28} color={type.color} />
                 </View>
                 <View style={styles.saleTypeInfo}>
                   <Text style={styles.saleTypeName}>{type.name}</Text>
-                  <Text style={styles.saleTypeDescription}>{type.description}</Text>
+                  <Text style={styles.saleTypeDescription}>
+                    {type.description}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#ccc" />
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.modalCancelButton}
             onPress={() => setShowSaleTypeModal(false)}
           >
@@ -434,9 +617,11 @@ export default function SaleScreen({ navigation }) {
     const customer = customersMap[selectedSale.customer_id] || null;
     const clientName = customer
       ? customer.name
-      : selectedSale.customer_id ? `Cliente #${selectedSale.customer_id}` : "Venda Local";
+      : selectedSale.customer_id
+      ? `Cliente #${selectedSale.customer_id}`
+      : "Venda Local";
 
-    const isPending = selectedSale.status === 'pending';
+    const isPending = selectedSale.status === "pending";
 
     return (
       <Modal
@@ -449,7 +634,7 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {isPending ? 'Venda Pendente' : 'Venda Finalizada'}
+                {isPending ? "Venda Pendente" : "Venda Finalizada"}
               </Text>
               <TouchableOpacity onPress={() => setShowSaleDetails(false)}>
                 <Ionicons name="close" size={24} color="#333" />
@@ -469,17 +654,21 @@ export default function SaleScreen({ navigation }) {
 
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Valor Total:</Text>
-                <Text style={styles.detailValue}>{formatBRL(selectedSale.total_amount)}</Text>
+                <Text style={styles.detailValue}>
+                  {formatBRL(selectedSale.total_amount)}
+                </Text>
               </View>
 
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Status:</Text>
-                <View style={[
-                  styles.statusBadge,
-                  isPending ? styles.statusPending : styles.statusPaid
-                ]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    isPending ? styles.statusPending : styles.statusPaid,
+                  ]}
+                >
                   <Text style={styles.statusText}>
-                    {isPending ? 'PENDENTE' : 'FINALIZADA'}
+                    {isPending ? "PENDENTE" : "FINALIZADA"}
                   </Text>
                 </View>
               </View>
@@ -487,7 +676,9 @@ export default function SaleScreen({ navigation }) {
               <View style={styles.detailSection}>
                 <Text style={styles.detailLabel}>Data de Criação:</Text>
                 <Text style={styles.detailValue}>
-                  {selectedSale.created_at ? new Date(selectedSale.created_at).toLocaleString('pt-BR') : 'N/A'}
+                  {selectedSale.created_at
+                    ? new Date(selectedSale.created_at).toLocaleString("pt-BR")
+                    : "N/A"}
                 </Text>
               </View>
 
@@ -495,9 +686,13 @@ export default function SaleScreen({ navigation }) {
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Forma de Pagamento:</Text>
                   <Text style={styles.detailValue}>
-                    {selectedSale.payment_method === 'cash' ? 'Dinheiro' :
-                     selectedSale.payment_method === 'card' ? 'Cartão' :
-                     selectedSale.payment_method === 'pix' ? 'PIX' : selectedSale.payment_method}
+                    {selectedSale.payment_method === "cash"
+                      ? "Dinheiro"
+                      : selectedSale.payment_method === "card"
+                      ? "Cartão"
+                      : selectedSale.payment_method === "pix"
+                      ? "PIX"
+                      : selectedSale.payment_method}
                   </Text>
                 </View>
               )}
@@ -506,7 +701,7 @@ export default function SaleScreen({ navigation }) {
             <View style={styles.modalFooter}>
               {isPending ? (
                 <>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.modalButton, styles.editButton]}
                     onPress={() => editarVendaPendente(selectedSale)}
                   >
@@ -514,16 +709,20 @@ export default function SaleScreen({ navigation }) {
                     <Text style={styles.modalButtonText}>Editar Venda</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.modalButton, styles.finalizeButton]}
                     onPress={() => finalizarVendaPendente(selectedSale)}
                   >
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={20}
+                      color="#fff"
+                    />
                     <Text style={styles.modalButtonText}>Finalizar Venda</Text>
                   </TouchableOpacity>
                 </>
               ) : (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.modalButton, styles.closeButton]}
                   onPress={() => setShowSaleDetails(false)}
                 >
@@ -537,7 +736,7 @@ export default function SaleScreen({ navigation }) {
     );
   };
 
-  // Modal de filtros
+  // Modal de filtros (histórico)
   const renderFilterModal = () => (
     <Modal
       visible={filterModalVisible}
@@ -560,23 +759,29 @@ export default function SaleScreen({ navigation }) {
               <Text style={styles.filterLabel}>Status</Text>
               <View style={styles.filterOptions}>
                 {[
-                  { value: 'all', label: 'Todos' },
-                  { value: 'pending', label: 'Pendentes' },
-                  { value: 'paid', label: 'Pagos' },
-                  { value: 'cancelled', label: 'Cancelados' }
-                ].map(status => (
+                  { value: "all", label: "Todos" },
+                  { value: "pending", label: "Pendentes" },
+                  { value: "paid", label: "Pagos" },
+                  { value: "cancelled", label: "Cancelados" },
+                ].map((status) => (
                   <TouchableOpacity
                     key={status.value}
                     style={[
                       styles.filterOption,
-                      filters.status === status.value && styles.filterOptionSelected
+                      filters.status === status.value &&
+                        styles.filterOptionSelected,
                     ]}
-                    onPress={() => setFilters(prev => ({ ...prev, status: status.value }))}
+                    onPress={() =>
+                      setFilters((prev) => ({ ...prev, status: status.value }))
+                    }
                   >
-                    <Text style={[
-                      styles.filterOptionText,
-                      filters.status === status.value && styles.filterOptionTextSelected
-                    ]}>
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        filters.status === status.value &&
+                          styles.filterOptionTextSelected,
+                      ]}
+                    >
                       {status.label}
                     </Text>
                   </TouchableOpacity>
@@ -589,23 +794,32 @@ export default function SaleScreen({ navigation }) {
               <Text style={styles.filterLabel}>Período</Text>
               <View style={styles.filterOptions}>
                 {[
-                  { value: 'all', label: 'Todos' },
-                  { value: 'today', label: 'Hoje' },
-                  { value: 'week', label: 'Esta semana' },
-                  { value: 'month', label: 'Este mês' }
-                ].map(period => (
+                  { value: "all", label: "Todos" },
+                  { value: "today", label: "Hoje" },
+                  { value: "week", label: "Esta semana" },
+                  { value: "month", label: "Este mês" },
+                ].map((period) => (
                   <TouchableOpacity
                     key={period.value}
                     style={[
                       styles.filterOption,
-                      filters.dateRange === period.value && styles.filterOptionSelected
+                      filters.dateRange === period.value &&
+                        styles.filterOptionSelected,
                     ]}
-                    onPress={() => setFilters(prev => ({ ...prev, dateRange: period.value }))}
+                    onPress={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        dateRange: period.value,
+                      }))
+                    }
                   >
-                    <Text style={[
-                      styles.filterOptionText,
-                      filters.dateRange === period.value && styles.filterOptionTextSelected
-                    ]}>
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        filters.dateRange === period.value &&
+                          styles.filterOptionTextSelected,
+                      ]}
+                    >
                       {period.label}
                     </Text>
                   </TouchableOpacity>
@@ -618,23 +832,32 @@ export default function SaleScreen({ navigation }) {
               <Text style={styles.filterLabel}>Método de Pagamento</Text>
               <View style={styles.filterOptions}>
                 {[
-                  { value: 'all', label: 'Todos' },
-                  { value: 'cash', label: 'Dinheiro' },
-                  { value: 'card', label: 'Cartão' },
-                  { value: 'pix', label: 'PIX' }
-                ].map(method => (
+                  { value: "all", label: "Todos" },
+                  { value: "cash", label: "Dinheiro" },
+                  { value: "card", label: "Cartão" },
+                  { value: "pix", label: "PIX" },
+                ].map((method) => (
                   <TouchableOpacity
                     key={method.value}
                     style={[
                       styles.filterOption,
-                      filters.paymentMethod === method.value && styles.filterOptionSelected
+                      filters.paymentMethod === method.value &&
+                        styles.filterOptionSelected,
                     ]}
-                    onPress={() => setFilters(prev => ({ ...prev, paymentMethod: method.value }))}
+                    onPress={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        paymentMethod: method.value,
+                      }))
+                    }
                   >
-                    <Text style={[
-                      styles.filterOptionText,
-                      filters.paymentMethod === method.value && styles.filterOptionTextSelected
-                    ]}>
+                    <Text
+                      style={[
+                        styles.filterOptionText,
+                        filters.paymentMethod === method.value &&
+                          styles.filterOptionTextSelected,
+                      ]}
+                    >
                       {method.label}
                     </Text>
                   </TouchableOpacity>
@@ -644,19 +867,21 @@ export default function SaleScreen({ navigation }) {
           </ScrollView>
 
           <View style={styles.filterActions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.filterButton, styles.clearButton]}
-              onPress={() => setFilters({
-                status: 'all',
-                dateRange: 'today',
-                paymentMethod: 'all',
-                minAmount: '',
-                maxAmount: ''
-              })}
+              onPress={() =>
+                setFilters({
+                  status: "all",
+                  dateRange: "today",
+                  paymentMethod: "all",
+                  minAmount: "",
+                  maxAmount: "",
+                })
+              }
             >
               <Text style={styles.clearButtonText}>Limpar</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.filterButton, styles.applyButton]}
               onPress={() => {
                 setFilterModalVisible(false);
@@ -665,6 +890,45 @@ export default function SaleScreen({ navigation }) {
               <Text style={styles.applyButtonText}>Aplicar</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // Modal de seleção de relatório
+  const renderReportModal = () => (
+    <Modal visible={modalVisible} transparent animationType="fade">
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalBox}>
+          <Text style={styles.modalTitle}>Escolher Tipo de Relatório</Text>
+
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => gerarRelatorio("dia")}
+          >
+            <Text style={styles.modalButtonText}>Do Dia</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => gerarRelatorio("semana")}
+          >
+            <Text style={styles.modalButtonText}>Da Semana</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalButton}
+            onPress={() => gerarRelatorio("mes")}
+          >
+            <Text style={styles.modalButtonText}>Do Mês</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.modalButton, { backgroundColor: "#aaa" }]}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.modalButtonText}>Cancelar</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -690,9 +954,9 @@ export default function SaleScreen({ navigation }) {
           <Text style={styles.authMessage}>
             Faça login para acessar as vendas
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.authButton}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => navigation.navigate("Login")}
           >
             <Text style={styles.authButtonText}>Fazer Login</Text>
           </TouchableOpacity>
@@ -706,8 +970,8 @@ export default function SaleScreen({ navigation }) {
       <ScrollView
         style={styles.scrollContainer}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
+          <RefreshControl
+            refreshing={refreshing}
             onRefresh={onRefresh}
             enabled={isAuthenticated}
           />
@@ -723,15 +987,9 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.headerTop}>
             <Text style={styles.title}>Vendas</Text>
             <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.filterButtonHeader}
-                onPress={() => setFilterModalVisible(true)}
-              >
-                <Ionicons name="filter" size={20} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.statsButton}
-                onPress={() => navigation.navigate('VendasStats')}
+                onPress={() => navigation.navigate("VendasStats")}
               >
                 <Ionicons name="stats-chart" size={20} color="#fff" />
               </TouchableOpacity>
@@ -759,7 +1017,11 @@ export default function SaleScreen({ navigation }) {
           </View>
 
           {loading && (
-            <ActivityIndicator size="small" color="#fff" style={{ margin: 8 }} />
+            <ActivityIndicator
+              size="small"
+              color="#fff"
+              style={{ margin: 8 }}
+            />
           )}
         </LinearGradient>
 
@@ -775,9 +1037,10 @@ export default function SaleScreen({ navigation }) {
               <Text style={styles.mainSubText}>iniciar uma venda</Text>
             </TouchableOpacity>
 
+            {/* BOTÃO DE HISTÓRICO AGORA ABRE MODAL DE FILTROS */}
             <TouchableOpacity
               style={styles.historyButton}
-              onPress={() => navigation.navigate("HistoricoVendas")}
+              onPress={() => setFilterModalVisible(true)}
             >
               <View style={styles.historyIconContainer}>
                 <Ionicons name="time-outline" size={28} color="#7b2ff7" />
@@ -786,19 +1049,38 @@ export default function SaleScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
+          {/* BOTÃO DE RELATÓRIO */}
+          <TouchableOpacity
+            style={styles.reportButton}
+            onPress={() => setModalVisible(true)}
+          >
+            <View style={styles.reportIconContainer}>
+              <Ionicons
+                name="document-text-outline"
+                size={24}
+                color="#7b2ff7"
+              />
+            </View>
+            <Text style={styles.reportButtonText}>Relatório</Text>
+          </TouchableOpacity>
+
           {/* SEÇÃO PEDIDOS EM ANDAMENTO */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Pedidos em Andamento</Text>
-              <Text style={styles.pedidosCount}>({pedidosEmAndamento.length})</Text>
+              <Text style={styles.pedidosCount}>
+                ({pedidosEmAndamento.length})
+              </Text>
             </View>
-            
+
             {pedidosEmAndamento.length > 0 ? (
-              renderPedidosGrid(pedidosEmAndamento, 'andamento')
+              renderPedidosGrid(pedidosEmAndamento, "andamento")
             ) : (
               <View style={styles.emptyState}>
                 <Ionicons name="time-outline" size={40} color="#ccc" />
-                <Text style={styles.emptyStateText}>Nenhum pedido em andamento</Text>
+                <Text style={styles.emptyStateText}>
+                  Nenhum pedido em andamento
+                </Text>
                 <Text style={styles.emptyStateSubtext}>
                   Clique em "Nova Venda" para começar
                 </Text>
@@ -810,15 +1092,23 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Pedidos Finalizados</Text>
-              <Text style={styles.pedidosCount}>({pedidosFinalizados.length})</Text>
+              <Text style={styles.pedidosCount}>
+                ({pedidosFinalizados.length})
+              </Text>
             </View>
-            
+
             {pedidosFinalizados.length > 0 ? (
-              renderPedidosGrid(pedidosFinalizados, 'finalizado')
+              renderPedidosGrid(pedidosFinalizados, "finalizado")
             ) : (
               <View style={styles.emptyState}>
-                <Ionicons name="checkmark-circle-outline" size={40} color="#ccc" />
-                <Text style={styles.emptyStateText}>Nenhum pedido finalizado</Text>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={40}
+                  color="#ccc"
+                />
+                <Text style={styles.emptyStateText}>
+                  Nenhum pedido finalizado
+                </Text>
               </View>
             )}
           </View>
@@ -833,8 +1123,11 @@ export default function SaleScreen({ navigation }) {
       {/* MODAL DE DETALHES DA VENDA */}
       {renderSaleDetailsModal()}
 
-      {/* MODAL DE FILTROS */}
+      {/* MODAL DE FILTROS (HISTÓRICO) */}
       {renderFilterModal()}
+
+      {/* MODAL DE RELATÓRIO */}
+      {renderReportModal()}
     </SafeAreaView>
   );
 }
@@ -868,10 +1161,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  filterButtonHeader: {
-    padding: 8,
-    marginLeft: 10,
-  },
   statsButton: {
     padding: 8,
     marginLeft: 5,
@@ -902,7 +1191,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "stretch",
-    marginBottom: 30,
+    marginBottom: 20,
   },
   mainButton: {
     backgroundColor: "#7b2ff7",
@@ -958,6 +1247,34 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
   },
+  // Botão de relatório
+  reportButton: {
+    backgroundColor: "#fff",
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reportIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0e6ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  reportButtonText: {
+    color: "#7b2ff7",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
   // Estilos das seções de pedidos
   section: {
     marginBottom: 30,
@@ -975,8 +1292,8 @@ const styles = StyleSheet.create({
   },
   pedidosCount: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   pedidosRow: {
     flexDirection: "row",
@@ -1036,18 +1353,18 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   pedidoBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: 8,
     right: 8,
-    backgroundColor: '#FFF3CD',
+    backgroundColor: "#FFF3CD",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
   },
   pedidoBadgeText: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: '#856404',
+    fontWeight: "bold",
+    color: "#856404",
   },
   emptyState: {
     alignItems: "center",
@@ -1062,33 +1379,33 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: "#999",
     marginTop: 4,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 20,
     padding: 24,
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
   closeButton: {
     padding: 4,
@@ -1097,14 +1414,14 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   saleTypeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     marginBottom: 8,
     borderLeftWidth: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -1114,9 +1431,9 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#f8f4ff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f8f4ff",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
   saleTypeInfo: {
@@ -1124,45 +1441,45 @@ const styles = StyleSheet.create({
   },
   saleTypeName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
     marginBottom: 4,
   },
   saleTypeDescription: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
   },
   modalCancelButton: {
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   modalCancelText: {
     fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   modalBody: {
     maxHeight: 400,
   },
   detailSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   detailLabel: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   detailValue: {
     fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
+    color: "#333",
+    fontWeight: "600",
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -1170,115 +1487,44 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusPending: {
-    backgroundColor: '#FFF3CD',
+    backgroundColor: "#FFF3CD",
   },
   statusPaid: {
-    backgroundColor: '#D1ECF1',
+    backgroundColor: "#D1ECF1",
   },
   statusText: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   modalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: "#f0f0f0",
   },
   modalButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 12,
     borderRadius: 8,
     marginHorizontal: 4,
   },
   editButton: {
-    backgroundColor: '#FFA500',
+    backgroundColor: "#FFA500",
   },
   finalizeButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
   },
   closeButton: {
-    backgroundColor: '#7b2ff7',
+    backgroundColor: "#7b2ff7",
   },
   modalButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: "#fff",
+    fontWeight: "bold",
     marginLeft: 8,
-  },
-  // Estilos para filtros
-  filterModalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  filterContent: {
-    maxHeight: 400,
-  },
-  filterSection: {
-    marginBottom: 20,
-  },
-  filterLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-  },
-  filterOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  filterOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  filterOptionSelected: {
-    backgroundColor: '#7b2ff7',
-  },
-  filterOptionText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  filterOptionTextSelected: {
-    color: '#fff',
-  },
-  filterActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 16,
-  },
-  filterButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  clearButton: {
-    backgroundColor: '#f5f5f5',
-  },
-  applyButton: {
-    backgroundColor: '#7b2ff7',
-  },
-  clearButtonText: {
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  applyButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
   },
   // Estilos para autenticação
   loadingContainer: {
@@ -1320,5 +1566,100 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  // Estilos para filtros
+  filterModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: "90%",
+    maxHeight: "80%",
+  },
+  filterContent: {
+    maxHeight: 400,
+  },
+  filterSection: {
+    marginBottom: 20,
+  },
+  filterLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+  },
+  filterOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#f5f5f5",
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  filterOptionSelected: {
+    backgroundColor: "#7b2ff7",
+  },
+  filterOptionText: {
+    fontSize: 14,
+    color: "#666",
+  },
+  filterOptionTextSelected: {
+    color: "#fff",
+  },
+  filterActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+    paddingTop: 16,
+  },
+  filterButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginHorizontal: 4,
+  },
+  clearButton: {
+    backgroundColor: "#f5f5f5",
+  },
+  applyButton: {
+    backgroundColor: "#7b2ff7",
+  },
+  clearButtonText: {
+    color: "#666",
+    fontWeight: "bold",
+  },
+  applyButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  // Estilos para modal de relatório
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBox: {
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 12,
+    width: "80%",
+  },
+  modalButton: {
+    backgroundColor: "#7b2ff7",
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 5,
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: "center",
   },
 });
