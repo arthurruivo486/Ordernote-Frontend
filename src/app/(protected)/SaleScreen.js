@@ -176,6 +176,7 @@ export default function SaleScreen({ navigation }) {
       setRefreshing(false);
     }
   }, [isAuthenticated, user]);
+  
 
   useEffect(() => {
     if (isAuthenticated) {

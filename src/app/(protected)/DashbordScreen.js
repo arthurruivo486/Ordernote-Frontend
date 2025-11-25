@@ -155,7 +155,24 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  // ✅ FUNÇÃO PARA NAVEGAR PARA PEDIDOS PENDENTES
+  const navigateToPendingOrders = () => {
+    navigation.navigate("Vendas", { 
+      screen: "VendasMain",
+      params: { 
+        initialFilter: "pending" 
+      }
+    });
+  };
+
   const recentSales = sales.slice(0, 6);
+
+  // ✅ CONTADOR DE PEDIDOS PENDENTES PARA O BADGE
+  const pendingOrdersCount = sales.filter(sale => 
+    sale.status === "pending" || 
+    sale.status === "processing" || 
+    !sale.status
+  ).length;
 
   if (loading && !isAuthenticated) {
     return (
@@ -213,8 +230,6 @@ export default function DashboardScreen({ navigation }) {
             </View>
             <Ionicons name="cart-outline" size={28} color="#fff" />
           </View>
-
-          {/* ✅ REMOVIDO: summaryRow com histórico, total do dia e vendas hoje */}
 
           <Text style={styles.sectionTitleWhite}>vendas recentes</Text>
 
@@ -295,33 +310,46 @@ export default function DashboardScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={styles.menuGrid}>
+          {/* ✅ CORRIGIDO: Agora navega para a tela correta */}
           <TouchableOpacity
             style={styles.menuCard}
-            onPress={() => navigation.navigate("Produtos")}
+            onPress={() => navigation.navigate("ProductScreen")}
           >
             <Ionicons name="cube-outline" size={30} color="#00bcd4" />
             <Text style={styles.menuText}>Novo Produto</Text>
           </TouchableOpacity>
 
+          {/* ✅ CORRIGIDO: Agora navega para a tela correta */}
           <TouchableOpacity
             style={styles.menuCard}
-            onPress={() => navigation.navigate("Configurações")}
+            onPress={() => navigation.navigate("UserScreen")}
           >
             <Ionicons name="settings-outline" size={30} color="#ff9800" />
             <Text style={styles.menuText}>Configurações</Text>
           </TouchableOpacity>
 
+          {/* ✅ ATUALIZADO: Botão para Pedidos Pendentes com badge */}
           <TouchableOpacity
             style={styles.menuCard}
-            onPress={() => navigation.navigate("PedidosPendentes")}
+            onPress={navigateToPendingOrders}
           >
-            <Ionicons name="time-outline" size={30} color="#e91e63" />
+            <View style={styles.pedidosPendentesContainer}>
+              <Ionicons name="time-outline" size={30} color="#e91e63" />
+              {pendingOrdersCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {pendingOrdersCount > 9 ? '9+' : pendingOrdersCount}
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.menuText}>Pedidos Pendentes</Text>
           </TouchableOpacity>
 
+          {/* ✅ CORRIGIDO: Agora navega para a tela correta */}
           <TouchableOpacity
             style={styles.menuCard}
-            onPress={() => navigation.navigate("Clientes")}
+            onPress={() => navigation.navigate("CustomerScreen")}
           >
             <Ionicons name="person-add-outline" size={30} color="#18d467" />
             <Text style={styles.menuText}>Cadastrar Cliente</Text>
@@ -489,11 +517,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: "relative",
   },
   menuText: {
     marginTop: 10,
     fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
+  },
+  // ✅ NOVOS ESTILOS PARA O BADGE DE PEDIDOS PENDENTES
+  pedidosPendentesContainer: {
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#e91e63",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });
