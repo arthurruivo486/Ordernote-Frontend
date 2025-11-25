@@ -2,16 +2,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState, useEffect } from 'react';
 import { 
-  View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, 
+  View, Text, ScrollView, TouchableOpacity, TextInput, Alert, 
   Modal, FlatList, StyleSheet, ActivityIndicator 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from "../../context/AuthContext"; // ← Import do contexto
+import { useAuth } from "../../context/AuthContext";
 import api from '../../services/api';
 
 const ENDPOINTS = {
   PRODUCT_GROUPS: '/product_groups',
-  PRODUCTS: '/products',
+  PRODUCTS: '/product',
 };
 
 export default function ProductScreen({ navigation }) {
@@ -27,10 +27,8 @@ export default function ProductScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Usar o contexto de autenticação
   const { user, token, isAuthenticated } = useAuth();
 
-  // Buscar dados
   useEffect(() => {
     if (isAuthenticated) {
       fetchData();
@@ -55,42 +53,69 @@ export default function ProductScreen({ navigation }) {
 
   async function fetchProductGroups() {
     try {
-      // ✅ Verificar autenticação
       if (!isAuthenticated) {
         console.log("❌ Usuário não autenticado na tela de produtos");
         return;
       }
 
       console.log('🔄 Buscando grupos de produtos...');
+      
+      // PRIMEIRO: Tentar buscar todos os grupos sem filtro
       const res = await api.get(ENDPOINTS.PRODUCT_GROUPS);
       const data = res.data;
       
+      let groupsArray = [];
+
+      // Tratamento flexível da resposta
       if (Array.isArray(data)) {
-        console.log(`✅ ${data.length} grupos carregados da API`);
-        setProductGroups(data);
-      } else if (data && typeof data === 'object') {
+        groupsArray = data;
+      } else if (data && Array.isArray(data.data)) {
+        groupsArray = data.data;
+      } else if (data && Array.isArray(data.product_groups)) {
+        groupsArray = data.product_groups;
+      } else if (data && Array.isArray(data.groups)) {
+        groupsArray = data.groups;
+      } else {
+        // Tentar extrair de outras chaves possíveis
         const possibleArrays = ['data', 'product_groups', 'groups', 'items', 'results'];
-        let foundArray = null;
-        
         for (const key of possibleArrays) {
-          if (Array.isArray(data[key])) {
-            foundArray = data[key];
-            console.log(`✅ Array encontrado na chave "${key}": ${foundArray.length} grupos`);
+          if (data && Array.isArray(data[key])) {
+            groupsArray = data[key];
             break;
           }
         }
         
-        if (foundArray) {
-          setProductGroups(foundArray);
-        } else {
-          const groupsArray = Object.values(data).filter(item => 
+        // Se ainda não encontrou array, tentar criar um dos valores do objeto
+        if (groupsArray.length === 0 && data && typeof data === 'object') {
+          groupsArray = Object.values(data).filter(item => 
             item && typeof item === 'object' && (item.name || item.id)
           );
-          setProductGroups(groupsArray);
         }
-      } else {
-        setProductGroups([]);
       }
+
+      console.log(`📊 ${groupsArray.length} grupos encontrados no total`);
+
+      // ✅ FILTRAGEM MELHORADA: Mostrar grupos do usuário E grupos sem user_id (para compatibilidade)
+      const gruposFiltrados = groupsArray.filter(grupo => {
+        // Se o grupo não tem user_id, mostrar (para compatibilidade com dados antigos)
+        if (!grupo.user_id) {
+          console.log(`📁 Grupo sem user_id: ${grupo.name} - mostrando para compatibilidade`);
+          return true;
+        }
+        
+        // Se tem user_id, mostrar apenas se for do usuário atual
+        if (grupo.user_id === user?.id) {
+          return true;
+        }
+        
+        return false;
+      });
+
+      console.log(`✅ ${gruposFiltrados.length} grupos carregados para o usuário ${user?.id}`);
+      console.log('📋 Grupos:', gruposFiltrados.map(g => ({ id: g.id, name: g.name, user_id: g.user_id })));
+      
+      setProductGroups(gruposFiltrados);
+      
     } catch (err) {
       console.warn('❌ Erro ao buscar grupos:', err);
       
@@ -109,16 +134,17 @@ export default function ProductScreen({ navigation }) {
 
   async function fetchProducts() {
     try {
-      // ✅ Verificar autenticação
       if (!isAuthenticated) {
         console.log("❌ Usuário não autenticado");
         return;
       }
 
+      console.log("📦 Buscando produtos...");
+      
+      // Buscar todos os produtos primeiro
       const res = await api.get(ENDPOINTS.PRODUCTS);
       const data = res.data;
       
-      // CORREÇÃO: Tratamento mais seguro dos dados (igual ao da tela de clientes)
       let productsArray = [];
 
       if (Array.isArray(data)) {
@@ -132,10 +158,28 @@ export default function ProductScreen({ navigation }) {
         productsArray = [];
       }
 
-      setProducts(productsArray);
-      setFilteredProducts(productsArray.filter(p => p.is_active !== false));
+      console.log(`📊 ${productsArray.length} produtos encontrados no total`);
+
+      // ✅ FILTRAGEM MELHORADA: Mostrar produtos do usuário E produtos sem user_id (para compatibilidade)
+      const produtosFiltrados = productsArray.filter(produto => {
+        // Se o produto não tem user_id, mostrar (para compatibilidade com dados antigos)
+        if (!produto.user_id) {
+          console.log(`📦 Produto sem user_id: ${produto.name} - mostrando para compatibilidade`);
+          return true;
+        }
+        
+        // Se tem user_id, mostrar apenas se for do usuário atual
+        if (produto.user_id === user?.id) {
+          return true;
+        }
+        
+        return false;
+      });
+
+      setProducts(produtosFiltrados);
+      setFilteredProducts(produtosFiltrados.filter(p => p.is_active !== false));
       
-      console.log(`✅ ${productsArray.length} produtos carregados para o usuário ${user?.id}`);
+      console.log(`✅ ${produtosFiltrados.length} produtos carregados para o usuário ${user?.id}`);
     } catch (err) {
       console.warn('❌ Erro ao buscar produtos:', err);
       
@@ -181,20 +225,26 @@ export default function ProductScreen({ navigation }) {
     return products.filter(p => p.group_id === categoryId && p.is_active !== false);
   }
 
-  // Funções para navegar para a tela de produto
-function openAddProductModal(categoryId = null) {
+  function openAddProductModal(categoryId = null) {
+    navigation.navigate('NovoProdutoScreen', { categoryId });
+  }
 
-  navigation.navigate('NovoProdutoScreen', { categoryId });
-}
-
-function openEditProductModal(product) {
-  navigation.navigate('NovoProdutoScreen', { editingProduct: product });
-}
+  function openEditProductModal(product) {
+    navigation.navigate('NovoProdutoScreen', { editingProduct: product });
+  }
 
   async function handleDeleteProduct(product) {
-    // ✅ Verificar autenticação
     if (!isAuthenticated) {
       Alert.alert("Erro", "Usuário não autenticado");
+      return;
+    }
+
+    // ✅ VALIDAÇÃO MELHORADA: Permitir exclusão de produtos sem user_id ou do usuário atual
+    if (product.user_id && product.user_id !== user?.id) {
+      Alert.alert(
+        "Acesso Negado", 
+        "Este produto não pertence ao seu usuário e não pode ser excluído."
+      );
       return;
     }
 
@@ -231,7 +281,6 @@ function openEditProductModal(product) {
   }
 
   async function createGroup() {
-    // ✅ Verificar autenticação
     if (!isAuthenticated) {
       Alert.alert("Erro", "Usuário não autenticado");
       return;
@@ -247,6 +296,7 @@ function openEditProductModal(product) {
       await api.post(ENDPOINTS.PRODUCT_GROUPS, {
         name: newGroupName.trim(),
         icon: newGroupIcon.trim() || null,
+        user_id: user?.id // ✅ Sempre incluir user_id na criação
       });
       
       await fetchProductGroups();
@@ -270,7 +320,6 @@ function openEditProductModal(product) {
     }
   }
 
-  // ✅ Mostrar loading enquanto verifica autenticação
   if (loading && !isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
@@ -282,7 +331,6 @@ function openEditProductModal(product) {
     );
   }
 
-  // ✅ Mostrar mensagem se não estiver autenticado
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
@@ -303,7 +351,6 @@ function openEditProductModal(product) {
     );
   }
 
-  // Componente para a modal de produtos por categoria
   const CategoryProductsModal = () => {
     const categoryProducts = selectedCategory ? getProductsByCategory(selectedCategory.id) : [];
     
@@ -359,17 +406,9 @@ function openEditProductModal(product) {
                     onPress={() => openEditProductModal(item)}
                     onLongPress={() => handleDeleteProduct(item)}
                   >
-                    {item.image_url ? (
-                      <Image 
-                        source={{ uri: item.image_url }} 
-                        style={styles.productListImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.productListImagePlaceholder}>
-                        <Ionicons name="image-outline" size={24} color="#ccc" />
-                      </View>
-                    )}
+                    <View style={styles.productListIcon}>
+                      <Ionicons name="cube-outline" size={24} color="#7b2ff7" />
+                    </View>
                     <View style={styles.productListInfo}>
                       <Text style={styles.productListName} numberOfLines={1}>
                         {item.name}
@@ -443,7 +482,6 @@ function openEditProductModal(product) {
           </View>
         </LinearGradient>
 
-        {/* Formulário de criação de categoria */}
         <View style={styles.createWrapper}>
           <TextInput
             placeholder="Nome da categoria"
@@ -468,7 +506,6 @@ function openEditProductModal(product) {
           </TouchableOpacity>
         </View>
 
-        {/* Lista de categorias */}
         <View style={styles.categoriesSection}>
           <Text style={styles.sectionTitle}>
             Categorias ({productGroups.length})
@@ -518,7 +555,6 @@ function openEditProductModal(product) {
           )}
         </View>
 
-        {/* Busca e lista de produtos */}
         <View style={styles.searchWrapper}>
           <TextInput
             placeholder="Buscar produto..."
@@ -530,7 +566,7 @@ function openEditProductModal(product) {
 
         <View style={styles.productsSection}>
           <Text style={styles.sectionTitle}>
-            {searchQuery ? `Resultados (${filteredProducts.length})` : `Todos os Produtos (${filteredProducts.length})`}
+            {searchQuery ? `Resultados (${filteredProducts.length})` : `Produtos (${filteredProducts.length})`}
           </Text>
           
           {loading ? (
@@ -546,17 +582,9 @@ function openEditProductModal(product) {
                   style={styles.productCard}
                   onPress={() => openEditProductModal(prod)}
                 >
-                  {prod.image_url ? (
-                    <Image 
-                      source={{ uri: prod.image_url }} 
-                      style={styles.productImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.productImagePlaceholder}>
-                      <Ionicons name="image-outline" size={32} color="#ccc" />
-                    </View>
-                  )}
+                  <View style={styles.productIcon}>
+                    <Ionicons name="cube-outline" size={32} color="#7b2ff7" />
+                  </View>
                   <Text style={styles.productName} numberOfLines={2}>
                     {prod.name}
                   </Text>
@@ -592,13 +620,12 @@ function openEditProductModal(product) {
         <View style={styles.Space}></View>
       </ScrollView>
 
-      {/* Modal de produtos por categoria */}
       <CategoryProductsModal />
     </SafeAreaView>
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS (incluindo os mesmos da tela de clientes)
+// ✅ ESTILOS ATUALIZADOS (removidos os estilos para imagens)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -778,16 +805,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    alignItems: 'center',
   },
-  productImage: {
-    width: '100%',
-    height: 80,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  productImagePlaceholder: {
-    width: '100%',
-    height: 80,
+  productIcon: {
+    width: 60,
+    height: 60,
     borderRadius: 8,
     backgroundColor: '#f5f5f5',
     alignItems: 'center',
@@ -799,6 +821,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     marginBottom: 4,
+    textAlign: 'center',
   },
   productPrice: {
     color: '#7b2ff7',
@@ -810,6 +833,7 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 11,
     marginBottom: 4,
+    textAlign: 'center',
   },
   productStock: {
     color: '#888',
@@ -875,13 +899,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  productListImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  productListImagePlaceholder: {
+  productListIcon: {
     width: 50,
     height: 50,
     borderRadius: 8,
