@@ -25,7 +25,7 @@ export default function NovaVendaScreen({ navigation }) {
   const [clienteId, setClienteId] = useState(null);
   const [tableNumber, setTableNumber] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("dinheiro"); // ✅ Alterado para "dinheiro"
+  const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [showClientesModal, setShowClientesModal] = useState(false);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
 
@@ -48,32 +48,185 @@ export default function NovaVendaScreen({ navigation }) {
     }
 
     console.log("✅ Usuário autenticado:", user?.name);
+    console.log("👤 ID do usuário:", user?.id);
     carregarClientes();
     carregarProdutos();
     carregarGrupos();
   }, [isAuthenticated]);
 
-  // ✅ FUNÇÃO ATUALIZADA: Carregar clientes
+  // ✅ FUNÇÃO ATUALIZADA: Carregar clientes do usuário específico
   const carregarClientes = async () => {
     try {
-      console.log("📞 Carregando clientes...");
-      const response = await api.get("/customers");
-
+      console.log("📞 Carregando clientes do usuário:", user?.id);
+      
+      // ✅ Buscar clientes específicos do usuário logado
+      const response = await api.get(`/customers?user_id=${user?.id}`);
+      
       if (response.data) {
         const data = response.data;
         const clientesData = Array.isArray(data)
           ? data
           : data.customers || data.data || [];
-        setClientes(clientesData);
-        setClientesFiltrados(clientesData);
-        console.log(`✅ ${clientesData.length} clientes carregados`);
+        
+        // ✅ Filtra clientes pelo user_id para garantir que são do usuário atual
+        const clientesDoUsuario = clientesData.filter(cliente => 
+          cliente.user_id === user?.id
+        );
+        
+        setClientes(clientesDoUsuario);
+        setClientesFiltrados(clientesDoUsuario);
+        console.log(`✅ ${clientesDoUsuario.length} clientes carregados para o usuário ${user?.id}`);
       }
     } catch (error) {
       console.error(
         "❌ Erro ao carregar clientes:",
         error.response?.data || error.message
       );
-      Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar clientes...");
+        const response = await api.get("/customers");
+        if (response.data) {
+          const data = response.data;
+          const clientesData = Array.isArray(data)
+            ? data
+            : data.customers || data.data || [];
+          
+          const clientesDoUsuario = clientesData.filter(cliente => 
+            cliente.user_id === user?.id
+          );
+          
+          setClientes(clientesDoUsuario);
+          setClientesFiltrados(clientesDoUsuario);
+          console.log(`✅ ${clientesDoUsuario.length} clientes carregados (fallback) para o usuário ${user?.id}`);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de clientes:", fallbackError);
+        Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
+      }
+    }
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA: Carregar produtos do usuário específico
+  const carregarProdutos = async () => {
+    try {
+      console.log("📦 Carregando produtos do usuário:", user?.id);
+      
+      // ✅ Buscar produtos específicos do usuário logado
+      const response = await api.get(`/product?user_id=${user?.id}`);
+      
+      if (response.data) {
+        const data = response.data;
+        const produtosData = Array.isArray(data)
+          ? data
+          : data.products || data.data || [];
+        
+        // ✅ Filtra produtos pelo user_id para garantir que são do usuário atual
+        const produtosDoUsuario = produtosData.filter(produto => 
+          produto.user_id === user?.id
+        );
+        
+        setProdutosDisponiveis(produtosDoUsuario);
+        setProdutosFiltrados(produtosDoUsuario);
+        console.log(`✅ ${produtosDoUsuario.length} produtos carregados para o usuário ${user?.id}`);
+      }
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar produtos:",
+        error.response?.data || error.message
+      );
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar produtos...");
+        const response = await api.get("/product");
+        if (response.data) {
+          const data = response.data;
+          const produtosData = Array.isArray(data)
+            ? data
+            : data.products || data.data || [];
+          
+          const produtosDoUsuario = produtosData.filter(produto => 
+            produto.user_id === user?.id
+          );
+          
+          setProdutosDisponiveis(produtosDoUsuario);
+          setProdutosFiltrados(produtosDoUsuario);
+          console.log(`✅ ${produtosDoUsuario.length} produtos carregados (fallback) para o usuário ${user?.id}`);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de produtos:", fallbackError);
+        Alert.alert("Erro", "Não foi possível carregar a lista de produtos");
+      }
+    }
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA: Carregar grupos do usuário específico
+  const carregarGrupos = async () => {
+    try {
+      console.log("📂 Carregando grupos de produtos do usuário:", user?.id);
+      
+      // ✅ Buscar grupos específicos do usuário logado
+      const response = await api.get(`/product_groups?user_id=${user?.id}`);
+      
+      if (response.data) {
+        const data = response.data;
+        let gruposData = [];
+
+        if (Array.isArray(data)) {
+          gruposData = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          gruposData = data.data;
+        } else if (data.product_groups && Array.isArray(data.product_groups)) {
+          gruposData = data.product_groups;
+        } else if (data.groups && Array.isArray(data.groups)) {
+          gruposData = data.groups;
+        }
+
+        // ✅ Filtra grupos pelo user_id para garantir que são do usuário atual
+        const gruposDoUsuario = gruposData.filter(grupo => 
+          grupo.user_id === user?.id
+        );
+        
+        console.log(`✅ ${gruposDoUsuario.length} grupos carregados para o usuário ${user?.id}`);
+        setGruposCarregados(gruposDoUsuario);
+      }
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar grupos:",
+        error.response?.data || error.message
+      );
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar grupos...");
+        const response = await api.get("/product_groups");
+        if (response.data) {
+          const data = response.data;
+          let gruposData = [];
+
+          if (Array.isArray(data)) {
+            gruposData = data;
+          } else if (data.data && Array.isArray(data.data)) {
+            gruposData = data.data;
+          } else if (data.product_groups && Array.isArray(data.product_groups)) {
+            gruposData = data.product_groups;
+          } else if (data.groups && Array.isArray(data.groups)) {
+            gruposData = data.groups;
+          }
+
+          const gruposDoUsuario = gruposData.filter(grupo => 
+            grupo.user_id === user?.id
+          );
+          
+          console.log(`✅ ${gruposDoUsuario.length} grupos carregados (fallback) para o usuário ${user?.id}`);
+          setGruposCarregados(gruposDoUsuario);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de grupos:", fallbackError);
+        setGruposCarregados([]);
+      }
     }
   };
 
@@ -117,60 +270,6 @@ export default function NovaVendaScreen({ navigation }) {
   // ✅ NOVA FUNÇÃO: Remover cliente selecionado
   const removerClienteSelecionado = () => {
     setClienteId(null);
-  };
-
-  const carregarGrupos = async () => {
-    try {
-      console.log("📂 Carregando grupos de produtos...");
-      const response = await api.get("/product_groups");
-
-      if (response.data) {
-        const data = response.data;
-        let gruposData = [];
-
-        if (Array.isArray(data)) {
-          gruposData = data;
-        } else if (data.data && Array.isArray(data.data)) {
-          gruposData = data.data;
-        } else if (data.product_groups && Array.isArray(data.product_groups)) {
-          gruposData = data.product_groups;
-        } else if (data.groups && Array.isArray(data.groups)) {
-          gruposData = data.groups;
-        }
-
-        console.log(`✅ ${gruposData.length} grupos carregados da API`);
-        setGruposCarregados(gruposData);
-      }
-    } catch (error) {
-      console.error(
-        "❌ Erro ao carregar grupos:",
-        error.response?.data || error.message
-      );
-      setGruposCarregados([]);
-    }
-  };
-
-  const carregarProdutos = async () => {
-    try {
-      console.log("📦 Carregando produtos...");
-      const response = await api.get("/product");
-
-      if (response.data) {
-        const data = response.data;
-        const produtosData = Array.isArray(data)
-          ? data
-          : data.products || data.data || [];
-        setProdutosDisponiveis(produtosData);
-        setProdutosFiltrados(produtosData);
-        console.log(`✅ ${produtosData.length} produtos carregados`);
-      }
-    } catch (error) {
-      console.error(
-        "❌ Erro ao carregar produtos:",
-        error.response?.data || error.message
-      );
-      Alert.alert("Erro", "Não foi possível carregar a lista de produtos");
-    }
   };
 
   const encontrarNomeGrupo = (groupId) => {
@@ -247,6 +346,15 @@ export default function NovaVendaScreen({ navigation }) {
       return;
     }
 
+    // ✅ Verifica se o produto pertence ao usuário atual
+    if (produto.user_id !== user?.id) {
+      Alert.alert(
+        "Acesso Negado", 
+        "Este produto não pertence ao seu usuário e não pode ser adicionado."
+      );
+      return;
+    }
+
     const produtoExistente = produtos.find((p) => p.id === produto.id);
     if (produtoExistente) {
       setProdutos(
@@ -269,6 +377,7 @@ export default function NovaVendaScreen({ navigation }) {
           preco: parseFloat(produto.price) || 0,
           quantidade: 1,
           subtotal: parseFloat(produto.price) || 0,
+          user_id: produto.user_id // ✅ Mantém o user_id do produto
         },
       ]);
     }
@@ -318,6 +427,16 @@ export default function NovaVendaScreen({ navigation }) {
       return;
     }
 
+    // ✅ Verifica se todos os produtos pertencem ao usuário atual
+    const produtosNaoAutorizados = produtos.filter(p => p.user_id !== user?.id);
+    if (produtosNaoAutorizados.length > 0) {
+      Alert.alert(
+        "Acesso Negado",
+        "Alguns produtos não pertencem ao seu usuário e não podem ser vendidos."
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       console.log("🚀 Criando venda pendente para usuário:", user.id);
@@ -326,6 +445,7 @@ export default function NovaVendaScreen({ navigation }) {
         table_number: tableNumber ? parseInt(tableNumber) : null,
         notes: observacoes,
         status: "open",
+        user_id: user.id // ✅ Garante que a order é do usuário
       };
 
       console.log("📋 Criando order:", orderData);
@@ -355,15 +475,17 @@ export default function NovaVendaScreen({ navigation }) {
         order_id: orderId,
         customer_id: clienteId || null,
         total_amount: calcularTotal(),
-        payment_method: mapPaymentMethodToEnglish(paymentMethod), // ✅ Usar função de mapeamento
+        payment_method: mapPaymentMethodToEnglish(paymentMethod),
         status: "pending",
         sale_type: "local",
         table_number: tableNumber ? parseInt(tableNumber) : null,
+        user_id: user.id, // ✅ Garante que a venda é do usuário
         items: produtos.map((produto) => ({
           product_id: produto.id,
           quantity: produto.quantidade,
           unit_price: produto.preco,
           subtotal: produto.subtotal,
+          user_id: user.id // ✅ Garante que cada item é do usuário
         })),
       };
 
@@ -420,6 +542,7 @@ export default function NovaVendaScreen({ navigation }) {
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>Nova Venda - Local</Text>
           <Text style={styles.userInfo}>Vendedor: {user?.name}</Text>
+          <Text style={styles.userIdInfo}>ID: {user?.id}</Text>
         </View>
         <View style={{ width: 24 }} />
       </View>
@@ -428,9 +551,14 @@ export default function NovaVendaScreen({ navigation }) {
         {/* Seção Informações do Vendedor */}
         <View style={styles.userSection}>
           <Text style={styles.userLabel}>Vendedor:</Text>
-          <Text style={styles.userName}>
-            {user?.name} (ID: {user?.id})
-          </Text>
+          <View>
+            <Text style={styles.userName}>
+              {user?.name}
+            </Text>
+            <Text style={styles.userId}>
+              ID: {user?.id}
+            </Text>
+          </View>
         </View>
 
         {/* Seção Mesa */}
@@ -504,6 +632,9 @@ export default function NovaVendaScreen({ navigation }) {
                   ✉️ {clienteSelecionado.email}
                 </Text>
               )}
+              <Text style={styles.clienteUserId}>
+                👤 ID do Usuário: {clienteSelecionado.user_id}
+              </Text>
             </View>
           )}
         </View>
@@ -531,6 +662,9 @@ export default function NovaVendaScreen({ navigation }) {
                     <Text style={styles.produtoNome}>{produto.nome}</Text>
                     <Text style={styles.produtoPreco}>
                       R$ {produto.preco.toFixed(2)}
+                    </Text>
+                    <Text style={styles.produtoUserId}>
+                      ID Usuário: {produto.user_id}
                     </Text>
                   </View>
                   <View style={styles.quantidadeContainer}>
@@ -576,14 +710,14 @@ export default function NovaVendaScreen({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.paymentOption,
-                paymentMethod === "dinheiro" && styles.paymentOptionSelected, // ✅ Alterado para "dinheiro"
+                paymentMethod === "dinheiro" && styles.paymentOptionSelected,
               ]}
-              onPress={() => setPaymentMethod("dinheiro")} // ✅ Alterado para "dinheiro"
+              onPress={() => setPaymentMethod("dinheiro")}
             >
               <Text
                 style={[
                   styles.paymentOptionText,
-                  paymentMethod === "dinheiro" && styles.paymentOptionTextSelected, // ✅ Alterado para "dinheiro"
+                  paymentMethod === "dinheiro" && styles.paymentOptionTextSelected,
                 ]}
               >
                 Dinheiro
@@ -592,14 +726,14 @@ export default function NovaVendaScreen({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.paymentOption,
-                paymentMethod === "cartao" && styles.paymentOptionSelected, // ✅ Alterado para "cartao"
+                paymentMethod === "cartao" && styles.paymentOptionSelected,
               ]}
-              onPress={() => setPaymentMethod("cartao")} // ✅ Alterado para "cartao"
+              onPress={() => setPaymentMethod("cartao")}
             >
               <Text
                 style={[
                   styles.paymentOptionText,
-                  paymentMethod === "cartao" && styles.paymentOptionTextSelected, // ✅ Alterado para "cartao"
+                  paymentMethod === "cartao" && styles.paymentOptionTextSelected,
                 ]}
               >
                 Cartão
@@ -723,6 +857,9 @@ export default function NovaVendaScreen({ navigation }) {
                       ✉️ {item.email}
                     </Text>
                   )}
+                  <Text style={styles.clienteUserIdModal}>
+                    👤 ID Usuário: {item.user_id}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#ccc" />
               </TouchableOpacity>
@@ -733,7 +870,7 @@ export default function NovaVendaScreen({ navigation }) {
                 <Text style={styles.emptyStateText}>
                   {termoBuscaClientes
                     ? "Nenhum cliente encontrado"
-                    : "Nenhum cliente cadastrado"}
+                    : "Nenhum cliente cadastrado para seu usuário"}
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
                   {termoBuscaClientes
@@ -746,7 +883,7 @@ export default function NovaVendaScreen({ navigation }) {
         </SafeAreaView>
       </Modal>
 
-      {/* Modal de Produtos (mantido igual) */}
+      {/* Modal de Produtos (atualizado) */}
       <Modal
         visible={showProdutosModal}
         transparent={true}
@@ -842,6 +979,9 @@ export default function NovaVendaScreen({ navigation }) {
                   <Text style={styles.produtoGrupoModal}>
                     {encontrarNomeGrupo(item.group_id || item.grupo_id)}
                   </Text>
+                  <Text style={styles.produtoUserIdModal}>
+                    👤 ID Usuário: {item.user_id}
+                  </Text>
                 </View>
                 <Ionicons name="add-circle" size={24} color="#7b2ff7" />
               </TouchableOpacity>
@@ -850,12 +990,12 @@ export default function NovaVendaScreen({ navigation }) {
               <View style={styles.emptyState}>
                 <Ionicons name="search-outline" size={48} color="#ccc" />
                 <Text style={styles.emptyStateText}>
-                  Nenhum produto encontrado
+                  Nenhum produto encontrado para seu usuário
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
                   {termoBusca
                     ? "Tente alterar os termos da busca"
-                    : "Nenhum produto disponível"}
+                    : "Cadastre produtos na tela de Produtos"}
                 </Text>
               </View>
             }
@@ -866,7 +1006,7 @@ export default function NovaVendaScreen({ navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS (mantidos iguais)
+// ✅ ESTILOS ATUALIZADOS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -894,6 +1034,11 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 4,
   },
+  userIdInfo: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 2,
+  },
   userSection: {
     backgroundColor: "#fff",
     padding: 15,
@@ -916,6 +1061,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     color: "#7b2ff7",
+  },
+  userId: {
+    fontSize: 12,
+    color: "#999",
   },
   content: {
     flex: 1,
@@ -963,6 +1112,11 @@ const styles = StyleSheet.create({
   clienteInfoText: {
     fontSize: 12,
     color: "#666",
+  },
+  clienteUserId: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 4,
   },
   selectButton: {
     borderWidth: 1,
@@ -1013,6 +1167,22 @@ const styles = StyleSheet.create({
   clienteDetailModal: {
     fontSize: 14,
     color: "#666",
+  },
+  clienteUserIdModal: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 2,
+  },
+  // Estilos para produtos
+  produtoUserId: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 2,
+  },
+  produtoUserIdModal: {
+    fontSize: 12,
+    color: "#999",
+    marginTop: 2,
   },
   // Estilos existentes mantidos...
   infoSection: {

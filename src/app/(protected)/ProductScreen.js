@@ -182,13 +182,14 @@ export default function ProductScreen({ navigation }) {
   }
 
   // Funções para navegar para a tela de produto
-  function openAddProductModal(categoryId = null) {
-    navigation.navigate('NovoProduto', { categoryId });
-  }
+function openAddProductModal(categoryId = null) {
 
-  function openEditProductModal(product) {
-    navigation.navigate('NovoProduto', { editingProduct: product });
-  }
+  navigation.navigate('NovoProdutoScreen', { categoryId });
+}
+
+function openEditProductModal(product) {
+  navigation.navigate('NovoProdutoScreen', { editingProduct: product });
+}
 
   async function handleDeleteProduct(product) {
     // ✅ Verificar autenticação

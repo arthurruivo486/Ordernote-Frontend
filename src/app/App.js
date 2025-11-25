@@ -29,8 +29,18 @@ function SaleStackNavigator() {
       <SaleStack.Screen name="NovaVenda" component={NovaVendaScreen} />
       <SaleStack.Screen name="NovaDelivery" component={NovaDeliveryScreen} />
       <SaleStack.Screen name="EditarVenda" component={EditarVendaScreen} />
-      <SaleStack.Screen name="NovoProduto" component={NovoProdutoScreen} />
+      {/* REMOVA NovoProdutoScreen daqui - ela não pertence ao stack de vendas */}
     </SaleStack.Navigator>
+  );
+}
+
+// ✅ ADICIONE: Stack Navigator para Produtos
+function ProductStackNavigator() {
+  return (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen name="ProductMain" component={ProductScreen} />
+      <MainStack.Screen name="NovoProdutoScreen" component={NovoProdutoScreen} />
+    </MainStack.Navigator>
   );
 }
 
@@ -69,7 +79,8 @@ function MainTabs() {
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Vendas" component={SaleStackNavigator} />
       <Tab.Screen name="CustomerScreen" component={CustomerScreen} />
-      <Tab.Screen name="ProductScreen" component={ProductScreen} />
+      {/* ✅ ALTERE: Use o ProductStackNavigator em vez do ProductScreen direto */}
+      <Tab.Screen name="ProductScreen" component={ProductStackNavigator} />
       <Tab.Screen name="UserScreen" component={UserScreen} />
     </Tab.Navigator>
   );

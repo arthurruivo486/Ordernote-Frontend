@@ -1,21 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState, useEffect } from 'react';
-import {
-  View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert,
-  Modal, StyleSheet, KeyboardAvoidingView, Platform
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Image, Alert, Modal, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../../services/api';
 
+// ✅ CORREÇÃO: Endpoint atualizado para produtos
 const ENDPOINTS = {
   PRODUCT_GROUPS: '/product_groups',
-  PRODUCTS: '/products',
+  PRODUCTS: '/products', // ✅ Alterado para plural (mais comum)
 };
 
 export default function NovoProdutoScreen({ navigation, route }) {
   const { editingProduct, categoryId } = route.params || {};
-  
   const [productGroups, setProductGroups] = useState([]);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [productForm, setProductForm] = useState({
@@ -24,7 +21,7 @@ export default function NovoProdutoScreen({ navigation, route }) {
     price: '',
     stock: '',
     group_id: '',
-    image_url: ''
+    is_active: true
   });
 
   useEffect(() => {
@@ -35,33 +32,36 @@ export default function NovoProdutoScreen({ navigation, route }) {
         price: editingProduct.price?.toString() || '',
         stock: editingProduct.stock?.toString() || '',
         group_id: editingProduct.group_id || '',
-        image_url: editingProduct.image_url || ''
+        is_active: editingProduct.is_active !== undefined ? editingProduct.is_active : true
       });
     } else if (categoryId) {
-      setProductForm(prev => ({ ...prev, group_id: categoryId }));
+      setProductForm(prev => ({
+        ...prev,
+        group_id: categoryId
+      }));
     }
-    
     fetchProductGroups();
   }, [editingProduct, categoryId]);
 
   async function fetchProductGroups() {
     try {
+      console.log('🔄 Buscando grupos de produtos...');
       const res = await api.get(ENDPOINTS.PRODUCT_GROUPS);
       const data = res.data;
+      
+      console.log('✅ Resposta dos grupos:', data);
       
       if (Array.isArray(data)) {
         setProductGroups(data);
       } else if (data && typeof data === 'object') {
         const possibleArrays = ['data', 'product_groups', 'groups', 'items', 'results'];
         let foundArray = null;
-        
         for (const key of possibleArrays) {
           if (Array.isArray(data[key])) {
             foundArray = data[key];
             break;
           }
         }
-        
         if (foundArray) {
           setProductGroups(foundArray);
         } else {
@@ -73,8 +73,10 @@ export default function NovoProdutoScreen({ navigation, route }) {
       } else {
         setProductGroups([]);
       }
+      console.log(`✅ ${productGroups.length} grupos carregados`);
     } catch (err) {
       console.warn('❌ Erro ao buscar grupos:', err);
+      console.warn('❌ Detalhes do erro:', err.response?.data);
       Alert.alert('Erro', 'Não foi possível carregar as categorias');
       setProductGroups([]);
     }
@@ -93,28 +95,80 @@ export default function NovoProdutoScreen({ navigation, route }) {
 
     setCreatingProduct(true);
     try {
+      // ✅ CORREÇÃO: Removido image_url do frontend, mas mantido no backend como null
       const productData = {
         name: productForm.name.trim(),
-        description: productForm.description.trim(),
+        description: productForm.description.trim() || null,
+        image_url: null, // ✅ REMOVIDO do frontend, enviado como null para backend
         price: parseFloat(productForm.price),
         stock: parseInt(productForm.stock) || 0,
         group_id: productForm.group_id ? parseInt(productForm.group_id) : null,
-        image_url: productForm.image_url.trim() || null,
-        is_active: true
+        user_id: 1, // ✅ Ajuste para o ID do usuário logado
+        is_active: Boolean(productForm.is_active)
       };
 
-      if (editingProduct) {
-        await api.put(`${ENDPOINTS.PRODUCTS}/${editingProduct.id}`, productData);
-        Alert.alert('Sucesso', 'Produto atualizado com sucesso');
-      } else {
-        await api.post(ENDPOINTS.PRODUCTS, productData);
-        Alert.alert('Sucesso', 'Produto criado com sucesso');
-      }
+      console.log('🔄 Enviando dados do produto:', productData);
 
-      navigation.goBack();
+      let endpoint = ENDPOINTS.PRODUCTS;
+      
+      // ✅ CORREÇÃO: Tentando diferentes formatos de endpoint
+      if (editingProduct) {
+        // Tentativa 1: /products/{id}
+        try {
+          await api.put(`${endpoint}/${editingProduct.id}`, productData);
+          Alert.alert('Sucesso', 'Produto atualizado com sucesso');
+          navigation.goBack();
+          return;
+        } catch (err) {
+          console.warn('❌ Erro na tentativa 1:', err.response?.data);
+          // Tentativa 2: /product/{id} (singular)
+          try {
+            await api.put(`/product/${editingProduct.id}`, productData);
+            Alert.alert('Sucesso', 'Produto atualizado com sucesso');
+            navigation.goBack();
+            return;
+          } catch (err2) {
+            console.warn('❌ Erro na tentativa 2:', err2.response?.data);
+            throw err2;
+          }
+        }
+      } else {
+        // Tentativa 1: /products
+        try {
+          await api.post(endpoint, productData);
+          Alert.alert('Sucesso', 'Produto criado com sucesso');
+          navigation.goBack();
+          return;
+        } catch (err) {
+          console.warn('❌ Erro na tentativa 1:', err.response?.data);
+          // Tentativa 2: /product (singular)
+          try {
+            await api.post('/product', productData);
+            Alert.alert('Sucesso', 'Produto criado com sucesso');
+            navigation.goBack();
+            return;
+          } catch (err2) {
+            console.warn('❌ Erro na tentativa 2:', err2.response?.data);
+            throw err2;
+          }
+        }
+      }
     } catch (err) {
-      console.warn('Erro ao salvar produto:', err);
-      Alert.alert('Erro', 'Não foi possível salvar o produto');
+      console.warn('❌ Erro ao salvar produto:', err);
+      console.warn('❌ Detalhes do erro:', err.response?.data);
+      console.warn('❌ URL da requisição:', err.config?.url);
+      
+      let errorMessage = 'Não foi possível salvar o produto';
+      
+      if (err.response?.status === 500) {
+        errorMessage = 'Erro interno do servidor. Verifique os logs do backend.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Endpoint não encontrado. Verifique a URL da API.';
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      }
+      
+      Alert.alert('Erro', errorMessage);
     } finally {
       setCreatingProduct(false);
     }
@@ -131,11 +185,17 @@ export default function NovoProdutoScreen({ navigation, route }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.delete(`${ENDPOINTS.PRODUCTS}/${editingProduct.id}`);
+              // ✅ CORREÇÃO: Tentando diferentes endpoints para delete
+              try {
+                await api.delete(`${ENDPOINTS.PRODUCTS}/${editingProduct.id}`);
+              } catch (err) {
+                await api.delete(`/product/${editingProduct.id}`);
+              }
               Alert.alert('Sucesso', 'Produto excluído com sucesso');
               navigation.goBack();
             } catch (err) {
-              console.warn('Erro ao excluir produto:', err);
+              console.warn('❌ Erro ao excluir produto:', err);
+              console.warn('❌ Detalhes do erro:', err.response?.data);
               Alert.alert('Erro', 'Não foi possível excluir o produto');
             }
           }
@@ -146,15 +206,9 @@ export default function NovoProdutoScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={["#872bb8", "#311aa4"]}
-        style={styles.header}
-      >
+      <LinearGradient colors={["#872bb8", "#311aa4"]} style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Ionicons name="chevron-back" size={26} color="#fff" />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
@@ -167,10 +221,15 @@ export default function NovoProdutoScreen({ navigation, route }) {
       </LinearGradient>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={styles.keyboardAvoid}
       >
-        <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.formContainer} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          
           <Text style={styles.formLabel}>Nome do Produto *</Text>
           <TextInput
             placeholder="Digite o nome do produto"
@@ -188,6 +247,8 @@ export default function NovoProdutoScreen({ navigation, route }) {
             multiline
             numberOfLines={3}
           />
+
+          {/* ✅ REMOVIDO: Campo de URL da imagem */}
 
           <Text style={styles.formLabel}>Preço *</Text>
           <TextInput
@@ -231,34 +292,62 @@ export default function NovoProdutoScreen({ navigation, route }) {
             ))}
           </View>
 
-          <Text style={styles.formLabel}>URL da Imagem</Text>
-          <TextInput
-            placeholder="https://exemplo.com/imagem.jpg (opcional)"
-            value={productForm.image_url}
-            onChangeText={(text) => setProductForm({...productForm, image_url: text})}
-            style={styles.formInput}
-          />
+          {/* Status Ativo */}
+          <Text style={styles.formLabel}>Status do Produto</Text>
+          <View style={styles.statusContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statusOption,
+                productForm.is_active && styles.statusOptionActive
+              ]}
+              onPress={() => setProductForm({...productForm, is_active: true})}
+            >
+              <Text style={[
+                styles.statusText,
+                productForm.is_active && styles.statusTextActive
+              ]}>
+                ✅ Ativo
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.statusOption,
+                !productForm.is_active && styles.statusOptionInactive
+              ]}
+              onPress={() => setProductForm({...productForm, is_active: false})}
+            >
+              <Text style={[
+                styles.statusText,
+                !productForm.is_active && styles.statusTextInactive
+              ]}>
+                ❌ Inativo
+              </Text>
+            </TouchableOpacity>
+          </View>
 
+          {/* BOTÃO PRINCIPAL PARA CRIAR/ATUALIZAR PRODUTO */}
           <TouchableOpacity 
             style={styles.saveProductButton}
             onPress={handleSaveProduct}
             disabled={creatingProduct}
           >
+            <Ionicons name="add-circle" size={24} color="#fff" />
             <Text style={styles.saveProductButtonText}>
               {creatingProduct ? 'Salvando...' : (editingProduct ? 'Atualizar Produto' : 'Criar Produto')}
             </Text>
           </TouchableOpacity>
 
           {editingProduct && (
-            <TouchableOpacity 
-              style={styles.deleteProductButton}
-              onPress={handleDeleteProduct}
-            >
+            <TouchableOpacity style={styles.deleteProductButton} onPress={handleDeleteProduct}>
               <Text style={styles.deleteProductButtonText}>
                 Excluir Produto
               </Text>
             </TouchableOpacity>
           )}
+
+          {/* ESPAÇAMENTO EXTRA NO FINAL PARA EVITAR SOBREPOSIÇÃO */}
+          <View style={styles.bottomSpacing} />
+          
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -268,15 +357,11 @@ export default function NovoProdutoScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9f4fc",
-  },
-  keyboardAvoid: {
-    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
   header: {
+    paddingVertical: 15,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 20,
   },
   headerContent: {
     flexDirection: 'row',
@@ -284,38 +369,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   backButton: {
-    padding: 4,
+    padding: 5,
   },
   titleContainer: {
     flex: 1,
     alignItems: 'center',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#fff',
   },
   placeholder: {
-    width: 26,
+    width: 36,
+  },
+  keyboardAvoid: {
+    flex: 1,
   },
   formContainer: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   formLabel: {
-    color: '#333',
+    fontSize: 16,
     fontWeight: '600',
-    fontSize: 14,
-    marginBottom: 6,
-    marginTop: 12,
+    marginBottom: 8,
+    color: '#333',
   },
   formInput: {
     backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
     fontSize: 16,
   },
   textArea: {
@@ -325,58 +415,96 @@ const styles = StyleSheet.create({
   categoryPicker: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 10,
+    marginBottom: 16,
+    gap: 8,
   },
   categoryOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f0f0f0',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#ddd',
   },
   categoryOptionSelected: {
-    backgroundColor: '#7b2ff7',
-    borderColor: '#7b2ff7',
+    backgroundColor: '#872bb8',
+    borderColor: '#311aa4',
   },
   categoryOptionEmoji: {
-    fontSize: 14,
-    marginRight: 4,
+    fontSize: 16,
+    marginRight: 6,
   },
   categoryOptionName: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#333',
-    fontWeight: '500',
   },
   categoryOptionNameSelected: {
     color: '#fff',
+    fontWeight: '600',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    gap: 10,
+  },
+  statusOption: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+  },
+  statusOptionActive: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+  },
+  statusOptionInactive: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  statusTextActive: {
+    color: '#155724',
+  },
+  statusTextInactive: {
+    color: '#721c24',
   },
   saveProductButton: {
-    backgroundColor: '#4caf50',
-    paddingVertical: 15,
-    borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 20,
+    justifyContent: 'center',
+    backgroundColor: '#311aa4',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 8,
   },
   saveProductButtonText: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   deleteProductButton: {
-    backgroundColor: '#f44336',
-    paddingVertical: 15,
+    backgroundColor: '#dc3545',
+    padding: 15,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginBottom: 12,
   },
   deleteProductButtonText: {
     color: '#fff',
-    fontWeight: '700',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bottomSpacing: {
+    height: 30,
   },
 });
