@@ -19,19 +19,19 @@ export default function NovaVendaScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [clientesFiltrados, setClientesFiltrados] = useState([]); // ✅ Novo estado para clientes filtrados
+  const [clientesFiltrados, setClientesFiltrados] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [clienteId, setClienteId] = useState(null);
   const [tableNumber, setTableNumber] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState("dinheiro"); // ✅ Alterado para "dinheiro"
   const [showClientesModal, setShowClientesModal] = useState(false);
   const [showProdutosModal, setShowProdutosModal] = useState(false);
 
   // Estados para busca e filtro
   const [termoBusca, setTermoBusca] = useState("");
-  const [termoBuscaClientes, setTermoBuscaClientes] = useState(""); // ✅ Novo estado para busca de clientes
+  const [termoBuscaClientes, setTermoBuscaClientes] = useState("");
   const [grupoSelecionado, setGrupoSelecionado] = useState("todos");
   const [grupos, setGrupos] = useState([]);
   const [gruposCarregados, setGruposCarregados] = useState([]);
@@ -65,7 +65,7 @@ export default function NovaVendaScreen({ navigation }) {
           ? data
           : data.customers || data.data || [];
         setClientes(clientesData);
-        setClientesFiltrados(clientesData); // ✅ Inicializar clientes filtrados
+        setClientesFiltrados(clientesData);
         console.log(`✅ ${clientesData.length} clientes carregados`);
       }
     } catch (error) {
@@ -111,15 +111,13 @@ export default function NovaVendaScreen({ navigation }) {
   const selecionarCliente = (cliente) => {
     setClienteId(cliente.id);
     setShowClientesModal(false);
-    setTermoBuscaClientes(""); // Limpar busca ao selecionar
+    setTermoBuscaClientes("");
   };
 
   // ✅ NOVA FUNÇÃO: Remover cliente selecionado
   const removerClienteSelecionado = () => {
     setClienteId(null);
   };
-
-  // ... (mantenha as outras funções como carregarGrupos, carregarProdutos, etc.)
 
   const carregarGrupos = async () => {
     try {
@@ -343,11 +341,21 @@ export default function NovaVendaScreen({ navigation }) {
 
       console.log("🎯 Order ID obtido:", orderId);
 
+      // ✅ ATUALIZADO: Mapear os métodos de pagamento em português para inglês
+      const mapPaymentMethodToEnglish = (method) => {
+        const methods = {
+          'dinheiro': 'cash',
+          'cartao': 'card', 
+          'pix': 'pix'
+        };
+        return methods[method] || 'cash';
+      };
+
       const saleData = {
         order_id: orderId,
         customer_id: clienteId || null,
         total_amount: calcularTotal(),
-        payment_method: paymentMethod,
+        payment_method: mapPaymentMethodToEnglish(paymentMethod), // ✅ Usar função de mapeamento
         status: "pending",
         sale_type: "local",
         table_number: tableNumber ? parseInt(tableNumber) : null,
@@ -561,21 +569,21 @@ export default function NovaVendaScreen({ navigation }) {
           )}
         </View>
 
-        {/* Seção Pagamento */}
+        {/* ✅ SEÇÃO PAGAMENTO ATUALIZADA - NOMES EM PORTUGUÊS */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Forma de Pagamento</Text>
           <View style={styles.paymentOptions}>
             <TouchableOpacity
               style={[
                 styles.paymentOption,
-                paymentMethod === "cash" && styles.paymentOptionSelected,
+                paymentMethod === "dinheiro" && styles.paymentOptionSelected, // ✅ Alterado para "dinheiro"
               ]}
-              onPress={() => setPaymentMethod("cash")}
+              onPress={() => setPaymentMethod("dinheiro")} // ✅ Alterado para "dinheiro"
             >
               <Text
                 style={[
                   styles.paymentOptionText,
-                  paymentMethod === "cash" && styles.paymentOptionTextSelected,
+                  paymentMethod === "dinheiro" && styles.paymentOptionTextSelected, // ✅ Alterado para "dinheiro"
                 ]}
               >
                 Dinheiro
@@ -584,14 +592,14 @@ export default function NovaVendaScreen({ navigation }) {
             <TouchableOpacity
               style={[
                 styles.paymentOption,
-                paymentMethod === "card" && styles.paymentOptionSelected,
+                paymentMethod === "cartao" && styles.paymentOptionSelected, // ✅ Alterado para "cartao"
               ]}
-              onPress={() => setPaymentMethod("card")}
+              onPress={() => setPaymentMethod("cartao")} // ✅ Alterado para "cartao"
             >
               <Text
                 style={[
                   styles.paymentOptionText,
-                  paymentMethod === "card" && styles.paymentOptionTextSelected,
+                  paymentMethod === "cartao" && styles.paymentOptionTextSelected, // ✅ Alterado para "cartao"
                 ]}
               >
                 Cartão
@@ -858,7 +866,7 @@ export default function NovaVendaScreen({ navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
+// ✅ ESTILOS ATUALIZADOS (mantidos iguais)
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -23,6 +23,18 @@ export default function DashboardScreen({ navigation }) {
 
   const { user, token, isAuthenticated } = useAuth();
 
+  // ✅ FUNÇÃO PARA TRADUZIR MÉTODO DE PAGAMENTO
+  const traduzirMetodoPagamento = (method) => {
+    const methods = {
+      'cash': 'Dinheiro',
+      'card': 'Cartão',
+      'pix': 'PIX',
+      'dinheiro': 'Dinheiro',
+      'cartao': 'Cartão'
+    };
+    return methods[method] || method;
+  };
+
   const fetchData = useCallback(async () => {
     try {
       if (!isAuthenticated) {
@@ -196,7 +208,7 @@ export default function DashboardScreen({ navigation }) {
         >
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.title}>Dashboard</Text>
+              <Text style={styles.title}>Inicio</Text>
               <Text style={styles.userWelcome}>Olá, {user?.name}!</Text>
             </View>
             <Ionicons name="cart-outline" size={28} color="#fff" />
@@ -253,7 +265,10 @@ export default function DashboardScreen({ navigation }) {
                         <View key={s.id} style={styles.recentCardNEW}>
                           <Text style={styles.recentCardName}>{clientName}</Text>
                           <Text style={styles.recentCardPrice}>{formatBRL(s.total_amount)}</Text>
-                          <Text style={styles.recentCardMethod}>{s.payment_method}</Text>
+                          {/* ✅ ATUALIZADO: Mostrar método de pagamento em português */}
+                          <Text style={styles.recentCardMethod}>
+                            {traduzirMetodoPagamento(s.payment_method)}
+                          </Text>
                         </View>
                       );
                     })}
@@ -375,7 +390,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20, // ✅ Mantido para espaçamento entre header e vendas recentes
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -388,7 +403,6 @@ const styles = StyleSheet.create({
     opacity: 0.8,
     marginTop: 4,
   },
-  // ✅ REMOVIDO: summaryRow, historicButton, summaryBox, summaryLabel, summaryValue
   sectionTitleWhite: {
     color: "#fff",
     fontSize: 18,
