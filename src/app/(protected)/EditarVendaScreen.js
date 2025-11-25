@@ -22,6 +22,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   const [loading, setLoading] = useState(false);
   const [produtos, setProdutos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [clientesFiltrados, setClientesFiltrados] = useState([]);
   const [produtosDisponiveis, setProdutosDisponiveis] = useState([]);
   const [produtosFiltrados, setProdutosFiltrados] = useState([]);
   const [clienteId, setClienteId] = useState(sale?.customer_id ?? null);
@@ -40,6 +41,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   
   // Estados para busca e filtro de produtos
   const [termoBusca, setTermoBusca] = useState('');
+  const [termoBuscaClientes, setTermoBuscaClientes] = useState('');
   const [grupoSelecionado, setGrupoSelecionado] = useState('todos');
   const [grupos, setGrupos] = useState([]);
   const [gruposCarregados, setGruposCarregados] = useState([]);
@@ -53,20 +55,132 @@ export default function EditarVendaScreen({ route, navigation }) {
       return;
     }
 
+    console.log("✅ Usuário autenticado para edição:", user?.name);
+    console.log("👤 ID do usuário para edição:", user?.id);
+    
     carregarDados();
   }, [isAuthenticated]);
 
-  // ✅ NOVA FUNÇÃO: Carregar grupos da API
+  // ✅ FUNÇÃO ATUALIZADA: Carregar clientes do usuário específico
+  const carregarClientes = async () => {
+    try {
+      console.log("📞 Carregando clientes do usuário:", user?.id);
+      
+      // ✅ Buscar clientes específicos do usuário logado
+      const response = await api.get(`/customers?user_id=${user?.id}`);
+      
+      if (response.data) {
+        const data = response.data;
+        const clientesData = Array.isArray(data)
+          ? data
+          : data.customers || data.data || [];
+        
+        // ✅ Filtra clientes pelo user_id para garantir que são do usuário atual
+        const clientesDoUsuario = clientesData.filter(cliente => 
+          cliente.user_id === user?.id
+        );
+        
+        setClientes(clientesDoUsuario);
+        setClientesFiltrados(clientesDoUsuario);
+        console.log(`✅ ${clientesDoUsuario.length} clientes carregados para o usuário ${user?.id}`);
+      }
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar clientes:",
+        error.response?.data || error.message
+      );
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar clientes...");
+        const response = await api.get("/customers");
+        if (response.data) {
+          const data = response.data;
+          const clientesData = Array.isArray(data)
+            ? data
+            : data.customers || data.data || [];
+          
+          const clientesDoUsuario = clientesData.filter(cliente => 
+            cliente.user_id === user?.id
+          );
+          
+          setClientes(clientesDoUsuario);
+          setClientesFiltrados(clientesDoUsuario);
+          console.log(`✅ ${clientesDoUsuario.length} clientes carregados (fallback) para o usuário ${user?.id}`);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de clientes:", fallbackError);
+        Alert.alert("Erro", "Não foi possível carregar a lista de clientes");
+      }
+    }
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA: Carregar produtos do usuário específico
+  const carregarProdutos = async () => {
+    try {
+      console.log("📦 Carregando produtos do usuário:", user?.id);
+      
+      // ✅ Buscar produtos específicos do usuário logado
+      const response = await api.get(`/product?user_id=${user?.id}`);
+      
+      if (response.data) {
+        const data = response.data;
+        const produtosData = Array.isArray(data)
+          ? data
+          : data.products || data.data || [];
+        
+        // ✅ Filtra produtos pelo user_id para garantir que são do usuário atual
+        const produtosDoUsuario = produtosData.filter(produto => 
+          produto.user_id === user?.id
+        );
+        
+        setProdutosDisponiveis(produtosDoUsuario);
+        setProdutosFiltrados(produtosDoUsuario);
+        console.log(`✅ ${produtosDoUsuario.length} produtos carregados para o usuário ${user?.id}`);
+      }
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar produtos:",
+        error.response?.data || error.message
+      );
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar produtos...");
+        const response = await api.get("/product");
+        if (response.data) {
+          const data = response.data;
+          const produtosData = Array.isArray(data)
+            ? data
+            : data.products || data.data || [];
+          
+          const produtosDoUsuario = produtosData.filter(produto => 
+            produto.user_id === user?.id
+          );
+          
+          setProdutosDisponiveis(produtosDoUsuario);
+          setProdutosFiltrados(produtosDoUsuario);
+          console.log(`✅ ${produtosDoUsuario.length} produtos carregados (fallback) para o usuário ${user?.id}`);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de produtos:", fallbackError);
+        Alert.alert("Erro", "Não foi possível carregar a lista de produtos");
+      }
+    }
+  };
+
+  // ✅ FUNÇÃO ATUALIZADA: Carregar grupos do usuário específico
   const carregarGrupos = async () => {
     try {
-      console.log("📂 Carregando grupos de produtos para edição...");
-      const response = await api.get("/product_groups");
+      console.log("📂 Carregando grupos de produtos do usuário:", user?.id);
+      
+      // ✅ Buscar grupos específicos do usuário logado
+      const response = await api.get(`/product_groups?user_id=${user?.id}`);
       
       if (response.data) {
         const data = response.data;
         let gruposData = [];
-        
-        // Diferentes formatos que a API pode retornar
+
         if (Array.isArray(data)) {
           gruposData = data;
         } else if (data.data && Array.isArray(data.data)) {
@@ -76,13 +190,50 @@ export default function EditarVendaScreen({ route, navigation }) {
         } else if (data.groups && Array.isArray(data.groups)) {
           gruposData = data.groups;
         }
+
+        // ✅ Filtra grupos pelo user_id para garantir que são do usuário atual
+        const gruposDoUsuario = gruposData.filter(grupo => 
+          grupo.user_id === user?.id
+        );
         
-        console.log(`✅ ${gruposData.length} grupos carregados para edição`);
-        setGruposCarregados(gruposData);
+        console.log(`✅ ${gruposDoUsuario.length} grupos carregados para o usuário ${user?.id}`);
+        setGruposCarregados(gruposDoUsuario);
       }
     } catch (error) {
-      console.error("❌ Erro ao carregar grupos:", error.response?.data || error.message);
-      setGruposCarregados([]);
+      console.error(
+        "❌ Erro ao carregar grupos:",
+        error.response?.data || error.message
+      );
+      
+      // ✅ Fallback: tentar buscar todos e filtrar localmente
+      try {
+        console.log("🔄 Tentando fallback para carregar grupos...");
+        const response = await api.get("/product_groups");
+        if (response.data) {
+          const data = response.data;
+          let gruposData = [];
+
+          if (Array.isArray(data)) {
+            gruposData = data;
+          } else if (data.data && Array.isArray(data.data)) {
+            gruposData = data.data;
+          } else if (data.product_groups && Array.isArray(data.product_groups)) {
+            gruposData = data.product_groups;
+          } else if (data.groups && Array.isArray(data.groups)) {
+            gruposData = data.groups;
+          }
+
+          const gruposDoUsuario = gruposData.filter(grupo => 
+            grupo.user_id === user?.id
+          );
+          
+          console.log(`✅ ${gruposDoUsuario.length} grupos carregados (fallback) para o usuário ${user?.id}`);
+          setGruposCarregados(gruposDoUsuario);
+        }
+      } catch (fallbackError) {
+        console.error("❌ Erro no fallback de grupos:", fallbackError);
+        setGruposCarregados([]);
+      }
     }
   };
 
@@ -102,42 +253,43 @@ export default function EditarVendaScreen({ route, navigation }) {
     }
   };
 
-  const carregarClientes = async () => {
-    try {
-      console.log("📞 Carregando clientes via /customers...");
-      const response = await api.get("/customers");
-      const data = response.data;
-
-      const clientesData = Array.isArray(data)
-        ? data
-        : data.customers || data.data || [];
-
-      setClientes(clientesData);
-      console.log(`✅ ${clientesData.length} clientes carregados`);
-    } catch (error) {
-      console.error("❌ Erro ao carregar clientes:", error.message);
-      setClientes([]);
+  // ✅ NOVAS FUNÇÕES: Busca e manipulação de clientes
+  const handleBuscaClientes = (texto) => {
+    setTermoBuscaClientes(texto);
+    
+    if (!texto.trim()) {
+      setClientesFiltrados(clientes);
+      return;
     }
+
+    const filtrados = clientes.filter((cliente) => {
+      const nome = cliente.name || cliente.nome || "";
+      const telefone = cliente.phone || cliente.telefone || "";
+      const email = cliente.email || "";
+
+      return (
+        nome.toLowerCase().includes(texto.toLowerCase()) ||
+        telefone.includes(texto) ||
+        email.toLowerCase().includes(texto.toLowerCase())
+      );
+    });
+
+    setClientesFiltrados(filtrados);
   };
 
-  const carregarProdutos = async () => {
-    try {
-      console.log("📦 Carregando produtos via /product...");
-      const response = await api.get("/product");
-      const data = response.data;
+  const limparBuscaClientes = () => {
+    setTermoBuscaClientes("");
+    setClientesFiltrados(clientes);
+  };
 
-      const produtosData = Array.isArray(data)
-        ? data
-        : data.products || data.produtos || data.data || [];
+  const selecionarCliente = (cliente) => {
+    setClienteId(cliente.id);
+    setShowClientesModal(false);
+    setTermoBuscaClientes("");
+  };
 
-      setProdutosDisponiveis(produtosData);
-      setProdutosFiltrados(produtosData);
-      console.log(`✅ ${produtosData.length} produtos carregados`);
-    } catch (error) {
-      console.error("❌ Erro ao carregar produtos:", error.message);
-      setProdutosDisponiveis([]);
-      setProdutosFiltrados([]);
-    }
+  const removerClienteSelecionado = () => {
+    setClienteId(null);
   };
 
   // ✅ FUNÇÃO: Encontrar nome do grupo
@@ -275,7 +427,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         }
       }
 
-      // CONVERSÃO DOS ITEMS
+      // CONVERSÃO DOS ITENS
       const produtosConvertidos = items.map((item) => {
         const produto = {
           id:
@@ -303,6 +455,7 @@ export default function EditarVendaScreen({ route, navigation }) {
             item.subtotal ||
               (item.unit_price || item.price || 0) * (item.quantity || 1)
           ),
+          user_id: item.user_id || user?.id // ✅ Adiciona user_id
         };
 
         console.log("📦 Item convertido:", produto);
@@ -327,6 +480,7 @@ export default function EditarVendaScreen({ route, navigation }) {
           preco: 10.0,
           quantidade: 1,
           subtotal: 10.0,
+          user_id: user?.id // ✅ Adiciona user_id
         },
       ];
 
@@ -339,6 +493,15 @@ export default function EditarVendaScreen({ route, navigation }) {
   const adicionarProduto = (produto) => {
     if (!produto || !produto.id) {
       console.error("Produto inválido:", produto);
+      return;
+    }
+
+    // ✅ Verifica se o produto pertence ao usuário atual
+    if (produto.user_id !== user?.id) {
+      Alert.alert(
+        "Acesso Negado", 
+        "Este produto não pertence ao seu usuário e não pode ser adicionado."
+      );
       return;
     }
 
@@ -364,6 +527,7 @@ export default function EditarVendaScreen({ route, navigation }) {
           preco: Number(produto.price || produto.preco || 0),
           quantidade: 1,
           subtotal: Number(produto.price || produto.preco || 0),
+          user_id: produto.user_id // ✅ Mantém o user_id do produto
         },
       ]);
     }
@@ -418,12 +582,22 @@ export default function EditarVendaScreen({ route, navigation }) {
             try {
               console.log("❌ Cancelando venda ID:", sale.id);
               
+              // ✅ Verifica se todos os produtos pertencem ao usuário atual
+              const produtosNaoAutorizados = produtos.filter(p => p.user_id !== user?.id);
+              if (produtosNaoAutorizados.length > 0) {
+                Alert.alert(
+                  "Acesso Negado",
+                  "Alguns produtos não pertencem ao seu usuário e não podem ser processados."
+                );
+                return;
+              }
+
               // Payload para cancelar a venda
               const payload = {
                 status: "cancelled",
-                // Mantém os outros dados para auditoria
                 total_amount: calcularTotal(),
                 payment_method: paymentMethod,
+                user_id: user.id // ✅ Garante que a venda é do usuário
               };
 
               console.log("📤 Payload de cancelamento:", payload);
@@ -458,6 +632,7 @@ export default function EditarVendaScreen({ route, navigation }) {
                     status: "cancelled",
                     total_amount: calcularTotal(),
                     payment_method: paymentMethod,
+                    user_id: user.id // ✅ Garante que a venda é do usuário
                   });
 
                   console.log("✅ Venda cancelada via PUT:", putResponse.data);
@@ -500,6 +675,16 @@ export default function EditarVendaScreen({ route, navigation }) {
       return;
     }
 
+    // ✅ Verifica se todos os produtos pertencem ao usuário atual
+    const produtosNaoAutorizados = produtos.filter(p => p.user_id !== user?.id);
+    if (produtosNaoAutorizados.length > 0) {
+      Alert.alert(
+        "Acesso Negado",
+        "Alguns produtos não pertencem ao seu usuário e não podem ser processados."
+      );
+      return;
+    }
+
     // Validação adicional
     if (!paymentMethod) {
       Alert.alert("Atenção", "Selecione uma forma de pagamento.");
@@ -520,6 +705,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         total_amount: total,
         payment_method: paymentMethod,
         status: "pending",
+        user_id: user.id // ✅ Garante que a venda é do usuário
       };
 
       // Adiciona campos opcionais
@@ -544,6 +730,7 @@ export default function EditarVendaScreen({ route, navigation }) {
             product_id: produto.id,
             quantity: Number(produto.quantidade),
             unit_price: Number(produto.preco),
+            user_id: user.id // ✅ Garante que cada item é do usuário
           })),
         };
 
@@ -620,14 +807,24 @@ export default function EditarVendaScreen({ route, navigation }) {
       return;
     }
 
+    // ✅ Verifica se todos os produtos pertencem ao usuário atual
+    const produtosNaoAutorizados = produtos.filter(p => p.user_id !== user?.id);
+    if (produtosNaoAutorizados.length > 0) {
+      Alert.alert(
+        "Acesso Negado",
+        "Alguns produtos não pertencem ao seu usuário e não podem ser processados."
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       // Payload SIMPLES igual ao que funciona na SaleScreen
       const payload = {
         status: "paid",
         payment_method: paymentMethod,
-        // Inclui o total atualizado
         total_amount: calcularTotal(),
+        user_id: user.id // ✅ Garante que a venda é do usuário
       };
 
       console.log("💰 Finalizando venda ID:", sale.id);
@@ -660,6 +857,7 @@ export default function EditarVendaScreen({ route, navigation }) {
             status: "paid",
             payment_method: paymentMethod,
             total_amount: calcularTotal(),
+            user_id: user.id // ✅ Garante que a venda é do usuário
           });
 
           console.log("✅ Venda finalizada via PUT:", putResponse.data);
@@ -708,7 +906,11 @@ export default function EditarVendaScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Editar Venda #{sale?.id}</Text>
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle}>Editar Venda #{sale?.id}</Text>
+          <Text style={styles.userInfo}>Vendedor: {user?.name}</Text>
+          <Text style={styles.userIdInfo}>ID: {user?.id}</Text>
+        </View>
         <View style={{ width: 24 }} />
       </View>
 
@@ -717,9 +919,13 @@ export default function EditarVendaScreen({ route, navigation }) {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Seção Informações do Vendedor */}
         <View style={styles.userSection}>
           <Text style={styles.userLabel}>Vendedor:</Text>
-          <Text style={styles.userName}>{user?.name}</Text>
+          <View>
+            <Text style={styles.userName}>{user?.name}</Text>
+            <Text style={styles.userId}>ID: {user?.id}</Text>
+          </View>
         </View>
 
         <View style={[styles.section, styles.statusSection]}>
@@ -743,8 +949,21 @@ export default function EditarVendaScreen({ route, navigation }) {
           />
         </View>
 
+        {/* ✅ SEÇÃO CLIENTE ATUALIZADA */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cliente</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cliente</Text>
+            {clienteSelecionado && (
+              <TouchableOpacity 
+                style={styles.removerClienteButton}
+                onPress={removerClienteSelecionado}
+              >
+                <Ionicons name="close-circle" size={16} color="#ff4444" />
+                <Text style={styles.removerClienteText}>Remover</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          
           <TouchableOpacity
             style={styles.selectButton}
             onPress={() => setShowClientesModal(true)}
@@ -757,11 +976,27 @@ export default function EditarVendaScreen({ route, navigation }) {
               }
             >
               {clienteSelecionado
-                ? clienteSelecionado.name ?? clienteSelecionado.nome
+                ? clienteSelecionado.name || clienteSelecionado.nome
                 : "Selecionar cliente (opcional)"}
             </Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
+          
+          {clienteSelecionado && (
+            <View style={styles.clienteInfo}>
+              <Text style={styles.clienteInfoText}>
+                {clienteSelecionado.phone && `📞 ${clienteSelecionado.phone}`}
+              </Text>
+              {clienteSelecionado.email && (
+                <Text style={styles.clienteInfoText}>
+                  ✉️ {clienteSelecionado.email}
+                </Text>
+              )}
+              <Text style={styles.clienteUserId}>
+                👤 ID do Usuário: {clienteSelecionado.user_id}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -786,6 +1021,9 @@ export default function EditarVendaScreen({ route, navigation }) {
                     <Text style={styles.produtoNome}>{produto.nome}</Text>
                     <Text style={styles.produtoPreco}>
                       R$ {Number(produto.preco).toFixed(2)}
+                    </Text>
+                    <Text style={styles.produtoUserId}>
+                      ID Usuário: {produto.user_id}
                     </Text>
                   </View>
                   <View style={styles.quantidadeContainer}>
@@ -942,43 +1180,94 @@ export default function EditarVendaScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Modal de Clientes */}
-      <Modal visible={showClientesModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Cliente</Text>
-              <TouchableOpacity onPress={() => setShowClientesModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              {clientes.length === 0 ? (
-                <Text style={styles.emptyModalText}>
-                  Nenhum cliente cadastrado
-                </Text>
-              ) : (
-                clientes.map((cliente) => (
-                  <TouchableOpacity
-                    key={cliente.id}
-                    style={styles.clienteItem}
-                    onPress={() => {
-                      setClienteId(cliente.id);
-                      setShowClientesModal(false);
-                    }}
-                  >
-                    <Text style={styles.clienteNome}>
-                      {cliente.name ?? cliente.nome}
-                    </Text>
-                    {cliente.phone && (
-                      <Text style={styles.clientePhone}>{cliente.phone}</Text>
-                    )}
-                  </TouchableOpacity>
-                ))
-              )}
-            </ScrollView>
+      {/* ✅ MODAL DE CLIENTES ATUALIZADO COM BARRA DE PESQUISA */}
+      <Modal
+        visible={showClientesModal}
+        transparent={true}
+        animationType="slide"
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Selecionar Cliente</Text>
+            <TouchableOpacity onPress={() => {
+              setShowClientesModal(false);
+              limparBuscaClientes();
+            }}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          {/* ✅ BARRA DE PESQUISA PARA CLIENTES */}
+          <View style={styles.searchContainer}>
+            <Ionicons
+              name="search"
+              size={20}
+              color="#999"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar clientes por nome, telefone ou email..."
+              value={termoBuscaClientes}
+              onChangeText={handleBuscaClientes}
+              placeholderTextColor="#999"
+            />
+            {termoBuscaClientes ? (
+              <TouchableOpacity onPress={limparBuscaClientes}>
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* ✅ LISTA DE CLIENTES FILTRADOS */}
+          <FlatList
+            data={clientesFiltrados}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.clientesList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.clienteItemModal}
+                onPress={() => selecionarCliente(item)}
+              >
+                <View style={styles.clienteInfoModal}>
+                  <Text style={styles.clienteNomeModal}>
+                    {item.name || item.nome}
+                  </Text>
+                  {item.phone && (
+                    <Text style={styles.clienteDetailModal}>
+                      📞 {item.phone}
+                    </Text>
+                  )}
+                  {item.email && (
+                    <Text style={styles.clienteDetailModal}>
+                      ✉️ {item.email}
+                    </Text>
+                  )}
+                  <Text style={styles.clienteUserIdModal}>
+                    👤 ID Usuário: {item.user_id}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="people-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyStateText}>
+                  {termoBuscaClientes
+                    ? "Nenhum cliente encontrado"
+                    : "Nenhum cliente cadastrado para seu usuário"}
+                </Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {termoBuscaClientes
+                    ? "Tente alterar os termos da busca"
+                    : "Cadastre clientes na tela de Clientes"}
+                </Text>
+              </View>
+            }
+          />
+        </SafeAreaView>
       </Modal>
 
       {/* ✅ Modal de Produtos ATUALIZADO com Grupos e Busca */}
@@ -1068,6 +1357,9 @@ export default function EditarVendaScreen({ route, navigation }) {
                   <Text style={styles.produtoGrupoModal}>
                     {encontrarNomeGrupo(item.group_id || item.grupo_id)}
                   </Text>
+                  <Text style={styles.produtoUserIdModal}>
+                    👤 ID Usuário: {item.user_id}
+                  </Text>
                 </View>
                 <Ionicons name="add-circle" size={24} color="#7b2ff7" />
               </TouchableOpacity>
@@ -1076,10 +1368,10 @@ export default function EditarVendaScreen({ route, navigation }) {
               <View style={styles.emptyState}>
                 <Ionicons name="search-outline" size={48} color="#ccc" />
                 <Text style={styles.emptyStateText}>
-                  Nenhum produto encontrado
+                  Nenhum produto encontrado para seu usuário
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
-                  {termoBusca ? 'Tente alterar os termos da busca' : 'Nenhum produto disponível'}
+                  {termoBusca ? 'Tente alterar os termos da busca' : 'Cadastre produtos na tela de Produtos'}
                 </Text>
               </View>
             }
@@ -1090,7 +1382,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS com botão de cancelar
+// ✅ ESTILOS ATUALIZADOS com botão de cancelar e novos estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1120,10 +1412,26 @@ const styles = StyleSheet.create({
     borderBottomColor: "#eee",
   },
 
+  headerInfo: {
+    alignItems: "center",
+  },
+
   headerTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#333",
+  },
+
+  userInfo: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+  },
+
+  userIdInfo: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 2,
   },
 
   content: {
@@ -1160,6 +1468,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     color: "#7b2ff7",
+  },
+
+  userId: {
+    fontSize: 12,
+    color: "#999",
   },
 
   statusSection: {
@@ -1213,6 +1526,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#333",
+  },
+
+  // ✅ NOVOS ESTILOS PARA SEÇÃO CLIENTE
+  removerClienteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 4,
+  },
+
+  removerClienteText: {
+    fontSize: 12,
+    color: "#ff4444",
+    marginLeft: 4,
+  },
+
+  clienteInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 6,
+  },
+
+  clienteInfoText: {
+    fontSize: 12,
+    color: "#666",
+  },
+
+  clienteUserId: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 4,
   },
 
   input: {
@@ -1300,6 +1644,12 @@ const styles = StyleSheet.create({
   produtoPreco: {
     fontSize: 12,
     color: "#666",
+  },
+
+  produtoUserId: {
+    fontSize: 10,
+    color: "#999",
+    marginTop: 2,
   },
 
   quantidadeContainer: {
@@ -1584,6 +1934,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
+  },
+
+  produtoUserIdModal: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+
+  // ✅ NOVOS ESTILOS PARA MODAL DE CLIENTES
+  clientesList: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+
+  clienteItemModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+
+  clienteInfoModal: {
+    flex: 1,
+  },
+
+  clienteNomeModal: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+
+  clienteDetailModal: {
+    fontSize: 14,
+    color: '#666',
+  },
+
+  clienteUserIdModal: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
   },
 
   emptyState: {
