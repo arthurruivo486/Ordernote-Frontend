@@ -38,7 +38,6 @@ export default function NovaDeliveryScreen({ navigation }) {
   const [termoBuscaClientes, setTermoBuscaClientes] = useState("");
   const [grupoSelecionado, setGrupoSelecionado] = useState('todos');
   const [grupos, setGrupos] = useState([]);
-  const [gruposCarregados, setGruposCarregados] = useState([]);
 
   // ✅ Usar o contexto de autenticação
   const { user, token, isAuthenticated } = useAuth();
@@ -55,8 +54,87 @@ export default function NovaDeliveryScreen({ navigation }) {
     console.log("👤 ID do usuário:", user?.id);
     carregarClientes();
     carregarProdutos();
-    carregarGrupos();
   }, [isAuthenticated]);
+
+  // ----------------------------------------------------
+  // 1. useEffect para gerar os grupos dinamicamente (ATUALIZADO)
+  // ----------------------------------------------------
+  useEffect(() => {
+    if (produtosDisponiveis.length > 0) {
+      const gruposExtraidos = {};
+
+      produtosDisponiveis.forEach((p) => {
+        const id = p.group_id || p.grupo_id;
+        const nome = p.group_name || p.grupo_nome || "Sem Grupo";
+        if (id) gruposExtraidos[id] = nome;
+      });
+
+      const listaFinal = [
+        { id: "todos", nome: "Todos" },
+        ...Object.entries(gruposExtraidos).map(([id, nome]) => ({
+          id: Number(id),
+          nome,
+        })),
+      ];
+
+      setGrupos(listaFinal);
+    } else {
+      setGrupos([{ id: "todos", nome: "Todos" }]);
+    }
+  }, [produtosDisponiveis]);
+
+  // ----------------------------------------------------
+  // 2. Função para encontrar o nome do grupo (ATUALIZADA)
+  // ----------------------------------------------------
+  const encontrarNomeGrupo = (id) => {
+    const grupo = grupos.find((g) => Number(g.id) === Number(id));
+    return grupo ? grupo.nome : "Sem grupo";
+  };
+
+  // ----------------------------------------------------
+  // 3. Filtro de busca (ATUALIZADO)
+  // ----------------------------------------------------
+  const handleBusca = (texto) => {
+    setTermoBusca(texto);
+
+    let filtrados = produtosDisponiveis;
+
+    if (texto.trim() !== "") {
+      filtrados = filtrados.filter((p) =>
+        (p.name || p.nome || "").toLowerCase().includes(texto.toLowerCase())
+      );
+    }
+
+    if (grupoSelecionado !== "todos") {
+      filtrados = filtrados.filter(
+        (p) => Number(p.group_id || p.grupo_id) === Number(grupoSelecionado)
+      );
+    }
+
+    setProdutosFiltrados(filtrados);
+  };
+
+  // ----------------------------------------------------
+  // 4. Filtro por grupo (ATUALIZADO)
+  // ----------------------------------------------------
+  const handleFiltroGrupo = (grupoId) => {
+    setGrupoSelecionado(grupoId);
+
+    let filtrados =
+      grupoId === "todos"
+        ? produtosDisponiveis
+        : produtosDisponiveis.filter(
+            (p) => Number(p.group_id || p.grupo_id) === Number(grupoId)
+          );
+
+    if (termoBusca.trim() !== "") {
+      filtrados = filtrados.filter((p) =>
+        (p.name || p.nome || "").toLowerCase().includes(termoBusca.toLowerCase())
+      );
+    }
+
+    setProdutosFiltrados(filtrados);
+  };
 
   // ✅ FUNÇÃO ATUALIZADA: Carregar clientes do usuário específico
   const carregarClientes = async () => {
@@ -166,74 +244,6 @@ export default function NovaDeliveryScreen({ navigation }) {
     }
   };
 
-  // ✅ FUNÇÃO ATUALIZADA: Carregar grupos do usuário específico
-  const carregarGrupos = async () => {
-    try {
-      console.log("📂 Carregando grupos de produtos do usuário:", user?.id);
-      
-      // ✅ Buscar grupos específicos do usuário logado
-      const response = await api.get(`/product_groups?user_id=${user?.id}`);
-      
-      if (response.data) {
-        const data = response.data;
-        let gruposData = [];
-
-        if (Array.isArray(data)) {
-          gruposData = data;
-        } else if (data.data && Array.isArray(data.data)) {
-          gruposData = data.data;
-        } else if (data.product_groups && Array.isArray(data.product_groups)) {
-          gruposData = data.product_groups;
-        } else if (data.groups && Array.isArray(data.groups)) {
-          gruposData = data.groups;
-        }
-
-        // ✅ Filtra grupos pelo user_id para garantir que são do usuário atual
-        const gruposDoUsuario = gruposData.filter(grupo => 
-          grupo.user_id === user?.id
-        );
-        
-        console.log(`✅ ${gruposDoUsuario.length} grupos carregados para o usuário ${user?.id}`);
-        setGruposCarregados(gruposDoUsuario);
-      }
-    } catch (error) {
-      console.error(
-        "❌ Erro ao carregar grupos:",
-        error.response?.data || error.message
-      );
-      
-      // ✅ Fallback: tentar buscar todos e filtrar localmente
-      try {
-        console.log("🔄 Tentando fallback para carregar grupos...");
-        const response = await api.get("/product_groups");
-        if (response.data) {
-          const data = response.data;
-          let gruposData = [];
-
-          if (Array.isArray(data)) {
-            gruposData = data;
-          } else if (data.data && Array.isArray(data.data)) {
-            gruposData = data.data;
-          } else if (data.product_groups && Array.isArray(data.product_groups)) {
-            gruposData = data.product_groups;
-          } else if (data.groups && Array.isArray(data.groups)) {
-            gruposData = data.groups;
-          }
-
-          const gruposDoUsuario = gruposData.filter(grupo => 
-            grupo.user_id === user?.id
-          );
-          
-          console.log(`✅ ${gruposDoUsuario.length} grupos carregados (fallback) para o usuário ${user?.id}`);
-          setGruposCarregados(gruposDoUsuario);
-        }
-      } catch (fallbackError) {
-        console.error("❌ Erro no fallback de grupos:", fallbackError);
-        setGruposCarregados([]);
-      }
-    }
-  };
-
   // ✅ NOVA FUNÇÃO: Buscar clientes
   const handleBuscaClientes = (texto) => {
     setTermoBuscaClientes(texto);
@@ -284,77 +294,6 @@ export default function NovaDeliveryScreen({ navigation }) {
     setClienteId(null);
     // Limpar endereço quando remover o cliente
     setEndereco({ rua: "", numero: "", complemento: "" });
-  };
-
-  // ✅ FUNÇÃO: Encontrar nome do grupo
-  const encontrarNomeGrupo = (groupId) => {
-    if (!groupId) return 'Sem Grupo';
-    
-    const grupo = gruposCarregados.find(g => g.id === groupId);
-    return grupo ? grupo.name || grupo.nome || `Grupo ${groupId}` : `Grupo ${groupId}`;
-  };
-
-  // ✅ FUNÇÃO: Extrair grupos únicos dos produtos
-  const extrairGruposDosProdutos = (produtosData, gruposAPI) => {
-    const gruposUnicos = [...new Map(produtosData
-      .filter(p => p.group_id || p.grupo_id)
-      .map(p => {
-        const grupoId = p.group_id || p.grupo_id;
-        const grupoNome = encontrarNomeGrupo(grupoId);
-        return [grupoId, { id: grupoId, nome: grupoNome }];
-      })).values()];
-    
-    // Adicionar opção "Todos" no início
-    const gruposComTodos = [
-      { id: 'todos', nome: 'Todos' },
-      ...gruposUnicos
-    ];
-    
-    console.log(`📂 ${gruposUnicos.length} grupos encontrados nos produtos`);
-    return gruposComTodos;
-  };
-
-  // ✅ useEffect: Processar grupos quando dados carregarem
-  useEffect(() => {
-    if (gruposCarregados.length > 0 && produtosDisponiveis.length > 0) {
-      console.log("🔄 Processando grupos dos produtos para delivery...");
-      const gruposProcessados = extrairGruposDosProdutos(produtosDisponiveis, gruposCarregados);
-      setGrupos(gruposProcessados);
-    }
-  }, [gruposCarregados, produtosDisponiveis]);
-
-  // Função para buscar produtos
-  const handleBusca = (texto) => {
-    setTermoBusca(texto);
-    filtrarProdutos(texto, grupoSelecionado);
-  };
-
-  // Função para filtrar por grupo
-  const handleFiltroGrupo = (grupoId) => {
-    setGrupoSelecionado(grupoId);
-    filtrarProdutos(termoBusca, grupoId);
-  };
-
-  // ✅ FUNÇÃO: Filtrar produtos
-  const filtrarProdutos = (busca, grupoId) => {
-    let filtrados = [...produtosDisponiveis];
-
-    // Filtro por busca
-    if (busca) {
-      filtrados = filtrados.filter(produto =>
-        produto.name?.toLowerCase().includes(busca.toLowerCase()) ||
-        produto.nome?.toLowerCase().includes(busca.toLowerCase())
-      );
-    }
-
-    // Filtro por grupo
-    if (grupoId !== 'todos') {
-      filtrados = filtrados.filter(produto => 
-        produto.group_id === grupoId || produto.grupo_id === grupoId
-      );
-    }
-
-    setProdutosFiltrados(filtrados);
   };
 
   const adicionarProduto = (produto) => {
@@ -828,7 +767,7 @@ export default function NovaDeliveryScreen({ navigation }) {
         </SafeAreaView>
       </Modal>
 
-      {/* ✅ Modal de Produtos ATUALIZADO com Grupos */}
+      {/* ✅ MODAL DE PRODUTOS ATUALIZADO COM AS NOVAS FUNÇÕES */}
       <Modal
         visible={showProdutosModal}
         transparent={true}
@@ -854,38 +793,41 @@ export default function NovaDeliveryScreen({ navigation }) {
               placeholderTextColor="#999"
             />
             {termoBusca ? (
-              <TouchableOpacity onPress={() => handleBusca('')}>
+              <TouchableOpacity onPress={() => handleBusca("")}>
                 <Ionicons name="close-circle" size={20} color="#999" />
               </TouchableOpacity>
             ) : null}
           </View>
 
-          {/* Filtro por Grupos */}
-          <ScrollView 
-            horizontal 
+          {/* Grupos */}
+          <ScrollView
+            horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.gruposContainer}
           >
-            {grupos.map(grupo => {
-              const produtosNoGrupo = grupo.id === 'todos' 
-                ? produtosDisponiveis 
-                : produtosDisponiveis.filter(p => 
-                    p.group_id === grupo.id || p.grupo_id === grupo.id
-                  );
-              
+            {grupos.map((grupo) => {
+              const produtosNoGrupo =
+                grupo.id === "todos"
+                  ? produtosDisponiveis
+                  : produtosDisponiveis.filter(
+                      (p) => Number(p.group_id || p.grupo_id) === Number(grupo.id)
+                    );
+
               return (
                 <TouchableOpacity
                   key={grupo.id}
                   style={[
                     styles.grupoItem,
-                    grupoSelecionado === grupo.id && styles.grupoItemSelecionado
+                    grupoSelecionado === grupo.id && styles.grupoItemSelecionado,
                   ]}
                   onPress={() => handleFiltroGrupo(grupo.id)}
                 >
-                  <Text style={[
-                    styles.grupoText,
-                    grupoSelecionado === grupo.id && styles.grupoTextSelecionado
-                  ]}>
+                  <Text
+                    style={[
+                      styles.grupoText,
+                      grupoSelecionado === grupo.id && styles.grupoTextSelecionado,
+                    ]}
+                  >
                     {grupo.nome} ({produtosNoGrupo.length})
                   </Text>
                 </TouchableOpacity>
@@ -893,14 +835,14 @@ export default function NovaDeliveryScreen({ navigation }) {
             })}
           </ScrollView>
 
-          {/* Lista de Produtos Filtrados */}
+          {/* Lista de Produtos */}
           <FlatList
             data={produtosFiltrados}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.produtosList}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.produtoItemModal}
                 onPress={() => adicionarProduto(item)}
               >
@@ -911,7 +853,6 @@ export default function NovaDeliveryScreen({ navigation }) {
                   <Text style={styles.produtoPrecoModal}>
                     R$ {parseFloat(item.price || item.preco || 0).toFixed(2)}
                   </Text>
-                  {/* ✅ Mostra o nome do grupo */}
                   <Text style={styles.produtoGrupoModal}>
                     {encontrarNomeGrupo(item.group_id || item.grupo_id)}
                   </Text>
@@ -926,10 +867,12 @@ export default function NovaDeliveryScreen({ navigation }) {
               <View style={styles.emptyState}>
                 <Ionicons name="search-outline" size={48} color="#ccc" />
                 <Text style={styles.emptyStateText}>
-                  Nenhum produto encontrado para seu usuário
+                  Nenhum produto encontrado
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
-                  {termoBusca ? 'Tente alterar os termos da busca' : 'Cadastre produtos na tela de Produtos'}
+                  {termoBusca
+                    ? "Tente alterar os termos da busca"
+                    : "Nenhum produto disponível"}
                 </Text>
               </View>
             }
@@ -940,7 +883,7 @@ export default function NovaDeliveryScreen({ navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
+// ✅ ESTILOS ATUALIZADOS (mantidos iguais)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
