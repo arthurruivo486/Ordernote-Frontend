@@ -4,11 +4,11 @@
     "slug": "Ordernote-Frontend",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/icon.png",
+    "icon": "./src/assets/Ordernote.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./src/assets/icon.png",
+      "image": "./src/assets/Ordernote.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,14 +17,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/icon.png",
+        "foregroundImage": "./src/assets/Ordernote.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.arthur486.OrdernoteFrontend"
     },
     "web": {
-      "favicon": "./src/assets/icon.png"
+      "favicon": "./src/assets/Ordernote.png"
     },
     "plugins": [
       "expo-secure-store"
