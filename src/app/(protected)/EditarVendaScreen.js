@@ -68,8 +68,8 @@ export default function EditarVendaScreen({ route, navigation }) {
       const gruposExtraidos = {};
 
       produtosDisponiveis.forEach((p) => {
-        const id = p.group_id || p.grupo_id;
-        const nome = p.group_name || p.grupo_nome || "Sem Grupo";
+        const id = p.id || p.id;
+        const nome = p.name || p.nome || "Sem Grupo";
         if (id) gruposExtraidos[id] = nome;
       });
 
@@ -111,7 +111,7 @@ export default function EditarVendaScreen({ route, navigation }) {
 
     if (grupoSelecionado !== "todos") {
       filtrados = filtrados.filter(
-        (p) => Number(p.group_id || p.grupo_id) === Number(grupoSelecionado)
+        (p) => Number(p.id || p.id) === Number(grupoSelecionado)
       );
     }
 
@@ -128,7 +128,7 @@ export default function EditarVendaScreen({ route, navigation }) {
       grupoId === "todos"
         ? produtosDisponiveis
         : produtosDisponiveis.filter(
-            (p) => Number(p.group_id || p.grupo_id) === Number(grupoId)
+            (p) => Number(p.id || p.id) === Number(grupoId)
           );
 
     if (termoBusca.trim() !== "") {
@@ -1254,7 +1254,7 @@ export default function EditarVendaScreen({ route, navigation }) {
                 grupo.id === "todos"
                   ? produtosDisponiveis
                   : produtosDisponiveis.filter(
-                      (p) => Number(p.group_id || p.grupo_id) === Number(grupo.id)
+                      (p) => Number(p.id || p.id) === Number(grupo.id)
                     );
 
               return (
