@@ -561,16 +561,7 @@ export default function SaleScreen({ navigation }) {
                   <Text style={styles.pedidoNumero}>
                     {formatOrderDisplay(pedido)}
                   </Text>
-                  {pedido.sale_type === "delivery" && (
-                    <View style={styles.deliveryBadge}>
-                      <Ionicons
-                        name="bicycle-outline"
-                        size={10}
-                        color="#fff"
-                      />
-                      <Text style={styles.deliveryBadgeText}>DELIVERY</Text>
-                    </View>
-                  )}
+                  
                 </View>
                 <Ionicons
                   name={getSaleIcon(pedido, tipo)}
