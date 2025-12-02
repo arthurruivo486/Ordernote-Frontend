@@ -61,42 +61,51 @@ export default function EditarVendaScreen({ route, navigation }) {
   }, [isAuthenticated]);
 
   // ----------------------------------------------------
-  // 1. useEffect para gerar os grupos dinamicamente
+  // ✅ 1. NOVA FUNÇÃO: Carregar grupos da API
   // ----------------------------------------------------
-  useEffect(() => {
-    if (produtosDisponiveis.length > 0) {
-      const gruposExtraidos = {};
-
-      produtosDisponiveis.forEach((p) => {
-        const id = p.id || p.id;
-        const nome = p.name || p.nome || "Sem Grupo";
-        if (id) gruposExtraidos[id] = nome;
-      });
-
+  const carregarGrupos = async () => {
+    try {
+      console.log("📋 Carregando grupos do usuário:", user?.id);
+      
+      const response = await api.get(`/product_groups?user_id=${user?.id}`);
+      
+      const gruposData = response.data || [];
+      
       const listaFinal = [
-        { id: "todos", nome: "Todos" },
-        ...Object.entries(gruposExtraidos).map(([id, nome]) => ({
-          id: Number(id),
-          nome,
-        })),
+        { id: "todos", nome: "Todos", icon: "📦" },
+        ...gruposData.map(g => ({
+          id: g.id,
+          nome: g.name,
+          icon: g.icon || "📦",
+        }))
       ];
-
+      
       setGrupos(listaFinal);
-    } else {
-      setGrupos([{ id: "todos", nome: "Todos" }]);
+      console.log(`✅ ${gruposData.length} grupos carregados para o usuário ${user?.id}`);
+      
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar grupos:",
+        error.response?.data || error.message
+      );
+      
+      // Fallback: usar grupo "Todos" apenas
+      setGrupos([{ id: "todos", nome: "Todos", icon: "📦" }]);
     }
-  }, [produtosDisponiveis]);
+  };
 
   // ----------------------------------------------------
-  // 2. Função para encontrar o nome do grupo
+  // ✅ 2. Função CORRIGIDA para encontrar o nome do grupo
   // ----------------------------------------------------
-  const encontrarNomeGrupo = (id) => {
-    const grupo = grupos.find((g) => Number(g.id) === Number(id));
+  const encontrarNomeGrupo = (groupId) => {
+    if (!groupId) return "Sem grupo";
+    
+    const grupo = grupos.find((g) => Number(g.id) === Number(groupId));
     return grupo ? grupo.nome : "Sem grupo";
   };
 
   // ----------------------------------------------------
-  // 3. Filtro de busca
+  // ✅ 3. Filtro de busca CORRIGIDO
   // ----------------------------------------------------
   const handleBusca = (texto) => {
     setTermoBusca(texto);
@@ -110,8 +119,9 @@ export default function EditarVendaScreen({ route, navigation }) {
     }
 
     if (grupoSelecionado !== "todos") {
+      // ✅ CORREÇÃO: Usar APENAS group_id para filtro
       filtrados = filtrados.filter(
-        (p) => Number(p.id || p.id) === Number(grupoSelecionado)
+        (p) => Number(p.group_id) === Number(grupoSelecionado)
       );
     }
 
@@ -119,7 +129,7 @@ export default function EditarVendaScreen({ route, navigation }) {
   };
 
   // ----------------------------------------------------
-  // 4. Filtro por grupo
+  // ✅ 4. Filtro por grupo CORRIGIDO
   // ----------------------------------------------------
   const handleFiltroGrupo = (grupoId) => {
     setGrupoSelecionado(grupoId);
@@ -127,13 +137,16 @@ export default function EditarVendaScreen({ route, navigation }) {
     let filtrados =
       grupoId === "todos"
         ? produtosDisponiveis
-        : produtosDisponiveis.filter(
-            (p) => Number(p.id || p.id) === Number(grupoId)
+        : // ✅ CORREÇÃO: Usar APENAS group_id para filtro
+          produtosDisponiveis.filter(
+            (p) => Number(p.group_id) === Number(grupoId)
           );
 
     if (termoBusca.trim() !== "") {
       filtrados = filtrados.filter((p) =>
-        (p.name || p.nome || "").toLowerCase().includes(termoBusca.toLowerCase())
+        (p.name || p.nome || "")
+          .toLowerCase()
+          .includes(termoBusca.toLowerCase())
       );
     }
 
@@ -255,6 +268,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         carregarClientes(),
         carregarProdutos(),
         carregarItensVenda(),
+        carregarGrupos(), // ✅ ADICIONADO: Carregar grupos da API
       ]);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -396,7 +410,8 @@ export default function EditarVendaScreen({ route, navigation }) {
             item.subtotal ||
               (item.unit_price || item.price || 0) * (item.quantity || 1)
           ),
-          user_id: item.user_id || user?.id // ✅ Adiciona user_id
+          user_id: item.user_id || user?.id, // ✅ Adiciona user_id
+          group_id: item.product?.group_id || item.group_id || null // ✅ Adiciona group_id para filtro
         };
 
         console.log("📦 Item convertido:", produto);
@@ -421,7 +436,8 @@ export default function EditarVendaScreen({ route, navigation }) {
           preco: 10.0,
           quantidade: 1,
           subtotal: 10.0,
-          user_id: user?.id // ✅ Adiciona user_id
+          user_id: user?.id, // ✅ Adiciona user_id
+          group_id: null
         },
       ];
 
@@ -468,7 +484,8 @@ export default function EditarVendaScreen({ route, navigation }) {
           preco: Number(produto.price || produto.preco || 0),
           quantidade: 1,
           subtotal: Number(produto.price || produto.preco || 0),
-          user_id: produto.user_id // ✅ Mantém o user_id do produto
+          user_id: produto.user_id, // ✅ Mantém o user_id do produto
+          group_id: produto.group_id // ✅ Mantém o group_id do produto
         },
       ]);
     }
@@ -1211,7 +1228,7 @@ export default function EditarVendaScreen({ route, navigation }) {
         </SafeAreaView>
       </Modal>
 
-      {/* ✅ MODAL DE PRODUTOS ATUALIZADO COM AS NOVAS FUNÇÕES */}
+      {/* ✅ MODAL DE PRODUTOS ATUALIZADO COM AS CORREÇÕES DOS GRUPOS */}
       <Modal
         visible={showProdutosModal}
         transparent={true}
@@ -1253,8 +1270,9 @@ export default function EditarVendaScreen({ route, navigation }) {
               const produtosNoGrupo =
                 grupo.id === "todos"
                   ? produtosDisponiveis
-                  : produtosDisponiveis.filter(
-                      (p) => Number(p.id || p.id) === Number(grupo.id)
+                  : // ✅ CORREÇÃO: Usar APENAS group_id para contar produtos
+                    produtosDisponiveis.filter(
+                      (p) => Number(p.group_id) === Number(grupo.id)
                     );
 
               return (
@@ -1272,7 +1290,7 @@ export default function EditarVendaScreen({ route, navigation }) {
                       grupoSelecionado === grupo.id && styles.grupoTextSelecionado,
                     ]}
                   >
-                    {grupo.nome} ({produtosNoGrupo.length})
+                    {grupo.icon} {grupo.nome} ({produtosNoGrupo.length})
                   </Text>
                 </TouchableOpacity>
               );
@@ -1297,8 +1315,9 @@ export default function EditarVendaScreen({ route, navigation }) {
                   <Text style={styles.produtoPrecoModal}>
                     R$ {parseFloat(item.price || item.preco || 0).toFixed(2)}
                   </Text>
+                  {/* ✅ CORREÇÃO: Mostrar grupo correto do produto */}
                   <Text style={styles.produtoGrupoModal}>
-                    {encontrarNomeGrupo(item.group_id || item.grupo_id)}
+                    {encontrarNomeGrupo(item.group_id)}
                   </Text>
                   <Text style={styles.produtoUserIdModal}>
                     👤 ID Usuário: {item.user_id}

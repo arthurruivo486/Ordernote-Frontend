@@ -314,27 +314,33 @@ export default function NovoProdutoScreen({ route, navigation }) {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView style={styles.scrollContainer}>
-          <LinearGradient
-            colors={["#872bb8", "#311aa4"]}
-            style={styles.header}
-          >
-            <View style={styles.headerTop}>
-              <TouchableOpacity onPress={() => navigation.goBack()}>
-                <Ionicons name="chevron-back" size={26} color="#fff" />
-              </TouchableOpacity>
-              <View style={styles.headerTitleContainer}>
-                <Text style={styles.title}>
-                  {editingProduct ? 'Editar Produto' : 'Novo Produto'}
-                </Text>
-                <Text style={styles.userInfo}>
-                  {editingProduct ? 'Atualize os dados do produto' : 'Cadastre um novo produto'}
-                </Text>
-              </View>
-              <View style={styles.placeholder} />
+        {/* Cabeçalho */}
+        <LinearGradient
+          colors={["#872bb8", "#311aa4"]}
+          style={styles.header}
+        >
+          <View style={styles.headerTop}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Ionicons name="chevron-back" size={26} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.title}>
+                {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+              </Text>
+              <Text style={styles.userInfo}>
+                {editingProduct ? 'Atualize os dados do produto' : 'Cadastre um novo produto'}
+              </Text>
             </View>
-          </LinearGradient>
+            <View style={styles.placeholder} />
+          </View>
+        </LinearGradient>
 
+        {/* Formulário rolável */}
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.formContainer}>
             {/* Nome do Produto */}
             <View style={styles.inputGroup}>
@@ -420,25 +426,30 @@ export default function NovoProdutoScreen({ route, navigation }) {
               />
             </View>
 
-            {/* Botão Salvar */}
-            <TouchableOpacity 
-              style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.saveButtonText}>
-                  {editingProduct ? 'Atualizar Produto' : 'Cadastrar Produto'}
-                </Text>
-              )}
-            </TouchableOpacity>
-
             {/* Campos obrigatórios */}
             <Text style={styles.requiredText}>* Campos obrigatórios</Text>
+            
+            {/* Espaço extra para o botão fixo */}
+            <View style={{ height: 90 }} />
           </View>
         </ScrollView>
+
+        {/* Botão FIXO na parte inferior */}
+        <View style={styles.bottomContainer}>
+          <TouchableOpacity 
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>
+                {editingProduct ? 'Atualizar Produto' : 'Cadastrar Produto'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         <CategoryModal />
       </KeyboardAvoidingView>
@@ -448,12 +459,15 @@ export default function NovoProdutoScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom:100,
     flex: 1,
     backgroundColor: "#f9f4fc",
   },
   scrollContainer: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
   },
   authContainer: {
     flex: 1,
@@ -578,8 +592,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+    justifyContent: 'center',
   },
   saveButtonDisabled: {
     backgroundColor: '#ccc',
@@ -594,6 +607,19 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 12,
     marginTop: 10,
+  },
+  bottomContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    paddingBottom: 25,
+    backgroundColor: '#f9f4fc',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
   },
   modalContainer: {
     flex: 1,

@@ -50,51 +50,55 @@ export default function NovaVendaScreen({ navigation }) {
     console.log("👤 ID do usuário:", user?.id);
     carregarClientes();
     carregarProdutos();
+    carregarGrupos(); // ✅ AGORA CARREGA OS GRUPOS CORRETAMENTE
   }, [isAuthenticated]);
 
   // ----------------------------------------------------
-  // 1. useEffect para gerar os grupos dinamicamente
+  // ✅ 1. NOVA FUNÇÃO: Carregar grupos da API
   // ----------------------------------------------------
-  useEffect(() => {
-    if (produtosDisponiveis.length > 0) {
-      const gruposExtraidos = {};
-
-      produtosDisponiveis.forEach((p) => {
-        const id = p.id;
-        const nome = p.name || "Sem Grupo";
-        const icon = p.icon || "❓";
-
-        if (id) {
-          gruposExtraidos[id] = { nome, icon };
-        }
-      });
+  const carregarGrupos = async () => {
+    try {
+      console.log("📋 Carregando grupos do usuário:", user?.id);
       
-
+      const response = await api.get(`/product_groups?user_id=${user?.id}`);
+      
+      const gruposData = response.data || [];
+      
       const listaFinal = [
         { id: "todos", nome: "Todos", icon: "📦" },
-        ...Object.entries(gruposExtraidos).map(([id, dados]) => ({
-          id: Number(id),
-          nome: dados.nome,
-          icon: dados.icon,
-        })),
+        ...gruposData.map(g => ({
+          id: g.id,
+          nome: g.name,
+          icon: g.icon || "📦",
+        }))
       ];
-
+      
       setGrupos(listaFinal);
-    } else {
+      console.log(`✅ ${gruposData.length} grupos carregados para o usuário ${user?.id}`);
+      
+    } catch (error) {
+      console.error(
+        "❌ Erro ao carregar grupos:",
+        error.response?.data || error.message
+      );
+      
+      // Fallback: usar grupo "Todos" apenas
       setGrupos([{ id: "todos", nome: "Todos", icon: "📦" }]);
     }
-  }, [produtosDisponiveis]);
+  };
 
   // ----------------------------------------------------
-  // 2. Função para encontrar o nome do grupo
+  // ✅ 2. Função CORRIGIDA para encontrar o nome do grupo
   // ----------------------------------------------------
-  const encontrarNomeGrupo = (id) => {
-    const grupo = grupos.find((g) => Number(g.id) === Number(id));
+  const encontrarNomeGrupo = (groupId) => {
+    if (!groupId) return "Sem grupo";
+    
+    const grupo = grupos.find((g) => Number(g.id) === Number(groupId));
     return grupo ? grupo.nome : "Sem grupo";
   };
 
   // ----------------------------------------------------
-  // 3. Filtro de busca
+  // ✅ 3. Filtro de busca CORRIGIDO
   // ----------------------------------------------------
   const handleBusca = (texto) => {
     setTermoBusca(texto);
@@ -108,8 +112,9 @@ export default function NovaVendaScreen({ navigation }) {
     }
 
     if (grupoSelecionado !== "todos") {
+      // ✅ CORREÇÃO: Usar APENAS group_id para filtro
       filtrados = filtrados.filter(
-        (p) => Number(p.id || p.id) === Number(grupoSelecionado)
+        (p) => Number(p.group_id) === Number(grupoSelecionado)
       );
     }
 
@@ -117,7 +122,7 @@ export default function NovaVendaScreen({ navigation }) {
   };
 
   // ----------------------------------------------------
-  // 4. Filtro por grupo
+  // ✅ 4. Filtro por grupo CORRIGIDO
   // ----------------------------------------------------
   const handleFiltroGrupo = (grupoId) => {
     setGrupoSelecionado(grupoId);
@@ -125,8 +130,9 @@ export default function NovaVendaScreen({ navigation }) {
     let filtrados =
       grupoId === "todos"
         ? produtosDisponiveis
-        : produtosDisponiveis.filter(
-            (p) => Number(p.id || p.id) === Number(grupoId)
+        : // ✅ CORREÇÃO: Usar APENAS group_id para filtro
+          produtosDisponiveis.filter(
+            (p) => Number(p.group_id) === Number(grupoId)
           );
 
     if (termoBusca.trim() !== "") {
@@ -843,7 +849,7 @@ export default function NovaVendaScreen({ navigation }) {
         </SafeAreaView>
       </Modal>
 
-      {/* ✅ MODAL DE PRODUTOS ATUALIZADO COM AS NOVAS FUNÇÕES */}
+      {/* ✅ MODAL DE PRODUTOS ATUALIZADO COM AS CORREÇÕES */}
       <Modal
         visible={showProdutosModal}
         transparent={true}
@@ -890,9 +896,9 @@ export default function NovaVendaScreen({ navigation }) {
               const produtosNoGrupo =
                 grupo.id === "todos"
                   ? produtosDisponiveis
-                  : produtosDisponiveis.filter(
-                      (p) =>
-                        Number(p.id || p.id) === Number(grupo.id)
+                  : // ✅ CORREÇÃO: Usar APENAS group_id para contar produtos
+                    produtosDisponiveis.filter(
+                      (p) => Number(p.group_id) === Number(grupo.id)
                     );
 
               return (
@@ -912,7 +918,7 @@ export default function NovaVendaScreen({ navigation }) {
                         styles.grupoTextSelecionado,
                     ]}
                   >
-                    {grupo.nome} ({produtosNoGrupo.length})
+                    {grupo.icon} {grupo.nome} ({produtosNoGrupo.length})
                   </Text>
                 </TouchableOpacity>
               );
@@ -937,8 +943,9 @@ export default function NovaVendaScreen({ navigation }) {
                   <Text style={styles.produtoPrecoModal}>
                     R$ {parseFloat(item.price || item.preco || 0).toFixed(2)}
                   </Text>
+                  {/* ✅ CORREÇÃO: Mostrar grupo correto do produto */}
                   <Text style={styles.produtoGrupoModal}>
-                    {encontrarNomeGrupo(item.id || item.id)}
+                    {encontrarNomeGrupo(item.group_id)}
                   </Text>
                   <Text style={styles.produtoUserIdModal}>
                     👤 ID Usuário: {item.user_id}
@@ -967,7 +974,7 @@ export default function NovaVendaScreen({ navigation }) {
   );
 }
 
-// ✅ ESTILOS ATUALIZADOS
+// ✅ ESTILOS (MANTIDOS IGUAIS)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1053,7 +1060,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
   },
-  // ✅ NOVOS ESTILOS PARA SEÇÃO CLIENTE
   removerClienteButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1097,7 +1103,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#999",
   },
-  // ✅ ESTILOS PARA MODAL DE CLIENTES
   clientesList: {
     padding: 16,
     paddingBottom: 32,
@@ -1134,7 +1139,6 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 2,
   },
-  // Estilos para produtos
   produtoUserId: {
     fontSize: 10,
     color: "#999",
@@ -1145,7 +1149,6 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 2,
   },
-  // Estilos existentes mantidos...
   infoSection: {
     backgroundColor: "#f0e6ff",
     padding: 12,
