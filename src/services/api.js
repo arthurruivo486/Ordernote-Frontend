@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE = "https://cautious-space-meme-v6pv59vgwr9xfxv9-3000.app.github.dev/api";
+const API_BASE = "https://super-duper-space-eureka-q7vvqr9j5qvj367r9-3000.app.github.dev/api";
 
 // Criar instância do axios
 const api = axios.create({
