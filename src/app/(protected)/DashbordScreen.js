@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -20,6 +20,11 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [sales, setSales] = useState([]);
   const [customersMap, setCustomersMap] = useState({});
+  
+  // ✅ REF para controlar o scroll horizontal
+  const horizontalScrollRef = useRef(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const [maxScrollWidth, setMaxScrollWidth] = useState(0);
 
   const { user, token, isAuthenticated } = useAuth();
 
@@ -174,6 +179,39 @@ export default function DashboardScreen({ navigation }) {
     !sale.status
   ).length;
 
+  // ✅ FUNÇÕES PARA CONTROLE DO CARROSSEL
+  const handleScrollLeft = () => {
+    if (horizontalScrollRef.current) {
+      const newPosition = Math.max(0, scrollPosition - 150); // Move 150px para esquerda
+      horizontalScrollRef.current.scrollTo({ x: newPosition, animated: true });
+      setScrollPosition(newPosition);
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (horizontalScrollRef.current && maxScrollWidth > 0) {
+      const newPosition = Math.min(maxScrollWidth, scrollPosition + 150); // Move 150px para direita
+      horizontalScrollRef.current.scrollTo({ x: newPosition, animated: true });
+      setScrollPosition(newPosition);
+    }
+  };
+
+  // ✅ FUNÇÃO PARA CALCULAR O SCROLL MÁXIMO
+  const handleContentSizeChange = (contentWidth) => {
+    if (horizontalScrollRef.current) {
+      horizontalScrollRef.current.measure((x, y, width, height) => {
+        const scrollableWidth = Math.max(0, contentWidth - width);
+        setMaxScrollWidth(scrollableWidth);
+      });
+    }
+  };
+
+  // ✅ FUNÇÃO PARA ATUALIZAR POSIÇÃO DO SCROLL
+  const handleScroll = (event) => {
+    const position = event.nativeEvent.contentOffset.x;
+    setScrollPosition(position);
+  };
+
   if (loading && !isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
@@ -231,7 +269,7 @@ export default function DashboardScreen({ navigation }) {
             <Ionicons name="cart-outline" size={28} color="#fff" />
           </View>
 
-          <Text style={styles.sectionTitleWhite}>vendas recentes</Text>
+          <Text style={styles.sectionTitleWhite}>Vendas recentes</Text>
 
           {loading ? (
             <ActivityIndicator
@@ -241,62 +279,82 @@ export default function DashboardScreen({ navigation }) {
             />
           ) : (
             <View style={styles.recentContainer}>
-              {recentSales.length === 0 ? (
-                <View style={styles.emptyRecent}>
-                  <Text style={{ color: "#fff", textAlign: "center" }}>
-                    Nenhuma venda recente
-                  </Text>
-                  <Text
-                    style={{
-                      color: "#fff",
-                      opacity: 0.7,
-                      fontSize: 12,
-                      marginTop: 5,
-                    }}
-                  >
-                    Suas vendas aparecerão aqui
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <Ionicons
-                    name="chevron-back-circle"
-                    size={32}
-                    color="#ffffffaa"
-                    style={{ alignSelf: "center", marginRight: 10 }}
-                  />
+              {/* ✅ SETA ESQUERDA AGORA É CLICÁVEL */}
+              <TouchableOpacity 
+                onPress={handleScrollLeft}
+                disabled={scrollPosition <= 0}
+                style={[
+                  styles.scrollArrow,
+                  scrollPosition <= 0 && styles.disabledArrow
+                ]}
+              >
+                <Ionicons
+                  name="chevron-back-circle"
+                  size={32}
+                  color={scrollPosition <= 0 ? "#ffffff55" : "#ffffffaa"}
+                />
+              </TouchableOpacity>
 
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.recentScrollContent}
-                  >
-                    {recentSales.map((s) => {
-                      if (!s) return null;
-                      const c = customersMap[s.customer_id] || null;
-                      const clientName = c ? c.name : s.customer_id ? `Cliente #${s.customer_id}` : "Venda Local";
+              <ScrollView
+                ref={horizontalScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScrollContent}
+                onContentSizeChange={handleContentSizeChange}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+              >
+                {recentSales.length === 0 ? (
+                  <View style={styles.emptyRecentCard}>
+                    <Text style={{ color: "#fff", textAlign: "center" }}>
+                      Nenhuma venda recente
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#fff",
+                        opacity: 0.7,
+                        fontSize: 12,
+                        marginTop: 5,
+                      }}
+                    >
+                      Suas vendas aparecerão aqui
+                    </Text>
+                  </View>
+                ) : (
+                  recentSales.map((s) => {
+                    if (!s) return null;
+                    const c = customersMap[s.customer_id] || null;
+                    const clientName = c ? c.name : s.customer_id ? `Cliente #${s.customer_id}` : "Venda Local";
 
-                      return (
-                        <View key={s.id} style={styles.recentCardNEW}>
-                          <Text style={styles.recentCardName}>{clientName}</Text>
-                          <Text style={styles.recentCardPrice}>{formatBRL(s.total_amount)}</Text>
-                          {/* ✅ ATUALIZADO: Mostrar método de pagamento em português */}
-                          <Text style={styles.recentCardMethod}>
-                            {traduzirMetodoPagamento(s.payment_method)}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
+                    return (
+                      <View key={s.id} style={styles.recentCardNEW}>
+                        <Text style={styles.recentCardName}>{clientName}</Text>
+                        <Text style={styles.recentCardPrice}>{formatBRL(s.total_amount)}</Text>
+                        {/* ✅ ATUALIZADO: Mostrar método de pagamento em português */}
+                        <Text style={styles.recentCardMethod}>
+                          {traduzirMetodoPagamento(s.payment_method)}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
 
-                  <Ionicons
-                    name="chevron-forward-circle"
-                    size={32}
-                    color="#ffffffaa"
-                    style={{ alignSelf: "center", marginLeft: 10 }}
-                  />
-                </>
-              )}
+              {/* ✅ SETA DIREITA AGORA É CLICÁVEL */}
+              <TouchableOpacity 
+                onPress={handleScrollRight}
+                disabled={scrollPosition >= maxScrollWidth}
+                style={[
+                  styles.scrollArrow,
+                  scrollPosition >= maxScrollWidth && styles.disabledArrow
+                ]}
+              >
+                <Ionicons
+                  name="chevron-forward-circle"
+                  size={32}
+                  color={scrollPosition >= maxScrollWidth ? "#ffffff55" : "#ffffffaa"}
+                />
+              </TouchableOpacity>
             </View>
           )}
         </LinearGradient>
@@ -305,8 +363,8 @@ export default function DashboardScreen({ navigation }) {
           style={styles.mainButton}
           onPress={() => navigation.navigate("Vendas")}
         >
-          <Text style={styles.mainButtonText}>fazer venda</Text>
-          <Text style={styles.mainSubText}>crie uma venda já</Text>
+          <Text style={styles.mainButtonText}>Fazer venda</Text>
+          <Text style={styles.mainSubText}>Crie uma venda já</Text>
         </TouchableOpacity>
 
         <View style={styles.menuGrid}>
@@ -440,14 +498,20 @@ const styles = StyleSheet.create({
   recentContainer: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
   },
   recentScrollContent: {
     paddingVertical: 10,
+    flexGrow: 1,
+    justifyContent: "center",
   },
-  emptyRecent: {
+  emptyRecentCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     padding: 20,
-    alignItems: 'center',
-    flex: 1,
+    borderRadius: 18,
+    minWidth: 120,
+    justifyContent: "center",
+    alignItems: "center",
   },
   recentCardNEW: {
     backgroundColor: "#fff",
@@ -475,6 +539,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#5c1fa8",
     opacity: 0.8,
+  },
+  // ✅ NOVOS ESTILOS PARA AS SETAS
+  scrollArrow: {
+    padding: 5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledArrow: {
+    opacity: 0.3,
   },
   mainButton: {
     backgroundColor: "#7b2ff7",
