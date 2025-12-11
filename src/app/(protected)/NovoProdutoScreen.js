@@ -912,7 +912,6 @@ export default function NovoProdutoScreen({ route, navigation }) {
   const handleSaveVariation = async (variationData) => {
     try {
       if (editingVariation) {
-        // Atualizar variação existente
         await api.patch(`${ENDPOINTS.PRODUCT_VARIATIONS}/${editingVariation.id}`, {
           ...variationData,
           product_id: editingProduct?.id,
@@ -925,11 +924,10 @@ export default function NovoProdutoScreen({ route, navigation }) {
           v.id === editingVariation.id ? { ...v, ...variationData } : v
         ));
       } else {
-        // Criar nova variação (só será salva depois que o produto for criado)
         setVariations(prev => [...prev, {
           ...variationData,
-          id: `temp-${Date.now()}`, // ID temporário para UI
-          product_id: null, // Será preenchido depois
+          id: `temp-${Date.now()}`, 
+          product_id: null, 
           user_id: user?.id
         }]);
       }
@@ -939,11 +937,9 @@ export default function NovoProdutoScreen({ route, navigation }) {
     }
   };
 
-  // NOVO: Função para salvar produto personalizado
   const handleSaveCustomProduct = (customProduct) => {
     setCustomProducts(prev => [...prev, customProduct]);
     
-    // Se for o único produto, atualiza o formulário principal
     if (customProducts.length === 0 && variations.length === 0) {
       setFormData(prev => ({
         ...prev,
@@ -2013,6 +2009,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    marginBottom:40,
   },
   modalContainer: {
     flex: 1,
